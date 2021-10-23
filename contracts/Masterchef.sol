@@ -1008,7 +1008,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     
     // Max top user count who can have FTM rewards from fee
     uint256 private limitofTopUserCountforFTMRewards = 100;
-    uint256 private harvestFTMInterval = 10 days;
+    uint256 private harvestFTMInterval = 1 days;
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -1460,10 +1460,11 @@ contract MasterChef is Ownable, ReentrancyGuard {
             // set the initial harvest time interval 
             if (user.nextHarvestFTMUntil == 0)
                 user.nextHarvestFTMUntil = block.timestamp.add(harvestFTMInterval);
+                
+            user.lastDepositTime = block.timestamp;
         }
         
         user.rewardDebt = user.amount.mul(pool.accBloqBallPerShare).div(1e12);
-        user.lastDepositTime = block.timestamp;
         
         emit Deposit(msg.sender, _pid, _amount);
         
@@ -1527,9 +1528,11 @@ contract MasterChef is Ownable, ReentrancyGuard {
         if (canHarvest(_pid, msg.sender)) {
             if (pending > 0 || user.rewardLockedUp > 0) {
                 uint256 totalRewards = pending.add(user.rewardLockedUp);
-                uint256 totalTax = calculateRewardTax(_pid, msg.sender);
+                uint256 totalTaxRate = calculateRewardTax(_pid, msg.sender);
+                uint256 totalTax = totalRewards.mul(totalTaxRate).div(10000);
                 addFeeAmount(totalTax);
-                totalRewards.sub(totalTax);
+                
+                totalRewards = totalRewards.sub(totalTax);
 
                 // reset lockup
                 totalLockedUpRewards = totalLockedUpRewards.sub(user.rewardLockedUp);
@@ -1622,10 +1625,12 @@ contract MasterChef is Ownable, ReentrancyGuard {
         harvestFTMInterval = amount;
     }
     
-    function calculateRewardTax(uint _pid, address _user) private view returns (uint256 taxRate)    {
+    function calculateRewardTax(uint _pid, address _user) public view returns (uint256 taxRate)    {
         UserInfo storage user = userInfo[_pid][_user];
+        require(user.lastDepositTime > 0, "User must deposite: Too Early");
         
         uint elapsedTime = block.timestamp - user.lastDepositTime - 1 days;
+        require(elapsedTime >= 0, "Harvest Time: Too Early");
         
         if (elapsedTime > limitDaysOfRewardTax * 24 * 3600)
             taxRate = 100;          // 1%
