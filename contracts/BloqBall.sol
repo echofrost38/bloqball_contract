@@ -1049,11 +1049,8 @@ contract BQBToken is ERC20, Ownable {
     
     // Burn address
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
-    
-    //  _decimals, _totalSupply
-    uint8 constant _decimals = 18;
+
     uint256 _initialSupply = 10000000 * (10 ** 18);      // 5M BQB
-    uint256 _totalSupply = 0;
     
     // Max transfer amount rate in basis points. (default is 0.5% of total supply)
     uint16 public maxTransferAmountRate = 50;
