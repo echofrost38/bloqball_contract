@@ -983,6 +983,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
     
     // The count of BQB transfered from transaction fees.
     uint256 private totalAmountFromFee = 0;
+
+    // The count of BQB transfered from reward fees.
+    uint256 private totalAmountFromFeeByRewards = 0;
     
     struct TopBalance {
         uint balance;
@@ -1068,12 +1071,15 @@ contract MasterChef is Ownable, ReentrancyGuard {
         limitDaysOfRewardTax = 50;
     }
 
-    function addFeeAmount(uint256 amount) public
+    function addFeeAmount(uint256 amount, bool fromTransfer) public
     {
         if (!enableStaking)
             return;
-            
-        totalAmountFromFee += amount;
+        
+        if (fromTransfer)
+            totalAmountFromFee += amount;
+        else
+            totalAmountFromFeeByRewards += amount;
         
         currentFeeIdofRewardAtTime[currentFeeID].timestamp = block.timestamp;
         currentFeeIdofRewardAtTime[currentFeeID].totalAmountFromFee = totalAmountFromFee;
@@ -1322,6 +1328,8 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
 
         uint256 BloqBallReward = getBQBRewardFromBlock(_pid).mul(pool.allocPoint).div(totalAllocPoint);
+        BloqBallReward = BloqBallReward.add(totalAmountFromFeeByRewards);
+        totalAmountFromFeeByRewards = 0;
                
 //      BloqBall.mint(devAddress, BloqBallReward.div(10));
         BloqBall.mint(address(this), BloqBallReward);
@@ -1530,7 +1538,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
                 uint256 totalRewards = pending.add(user.rewardLockedUp);
                 uint256 totalTaxRate = calculateRewardTax(_pid, msg.sender);
                 uint256 totalTax = totalRewards.mul(totalTaxRate).div(10000);
-                addFeeAmount(totalTax);
+                addFeeAmount(totalTax, false);
                 
                 totalRewards = totalRewards.sub(totalTax);
 

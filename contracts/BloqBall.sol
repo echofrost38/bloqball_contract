@@ -1024,7 +1024,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 }
 
 interface MasterChef {
-    function addFeeAmount(uint256 amount) external;
+    function addFeeAmount(uint256 amount, bool fromTransfer) external;
 }
 
 interface BloqBallLottery {
@@ -1150,7 +1150,6 @@ contract BQBToken is ERC20, Ownable {
         _excludedFromAntiWhale[address(this)] = true;
         _excludedFromAntiWhale[BURN_ADDRESS] = true;
         
-        // send 4M BQB tokens to owner address. 
         _mint(_operator, _initialSupply);
     }
     
@@ -1243,7 +1242,7 @@ contract BQBToken is ERC20, Ownable {
             if (bloqballMasterchef != address(0) && stakeAmount > 0)
             {
                 super._transfer(sender, bloqballMasterchef, stakeAmount);
-                MasterChef(bloqballMasterchef).addFeeAmount(stakeAmount);
+                MasterChef(bloqballMasterchef).addFeeAmount(stakeAmount, true);
             }
             
             if (bloqballlottery != address(0) && BloqBallLottery(bloqballlottery).getOperator() == address(this))
