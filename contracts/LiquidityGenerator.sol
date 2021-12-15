@@ -577,10 +577,8 @@ contract LiquidityGenerator {
     address public immutable bloqballRouter;
     address public immutable reservesManager;
     address public immutable distributor;
-    address public immutable bonusDistributor;
     uint public  immutable periodBegin;
     uint public  immutable periodEnd;
-    uint public  immutable bonusEnd;
     address public spiritPair;
     address public bloqballPair;
     uint public unlockTimestamp;
@@ -592,9 +590,7 @@ contract LiquidityGenerator {
         address indexed sender,
         uint amount,
         uint distributorTotalShares,
-        uint bonusDistributorTotalShares,
-        uint newShares,
-        uint newBonusShares
+        uint newShares
     );
     event PostponeUnlockTimestamp(uint prevUnlockTimestamp, uint unlockTimestamp);
     event Delivered(uint amountPair);
@@ -608,13 +604,10 @@ contract LiquidityGenerator {
         address bloqballPair_,
         address reservesManager_,
         address distributor_,
-        address bonusDistributor_,
         uint periodBegin_,
-        uint periodDuration_,
-        uint bonusDuration_
+        uint periodDuration_
     ) public {
         require(periodDuration_ > 0, "LiquidityGenerator: INVALID_PERIOD_DURATION");
-        require(bonusDuration_ > 0 && bonusDuration_ <= periodDuration_, "LiquidityGenerator: INVALID_BONUS_DURATION");
         admin = admin_;
         bloqball = bloqball_;
         spiritRouter = spiritRouter_;
@@ -623,18 +616,12 @@ contract LiquidityGenerator {
         bloqballPair = bloqballPair_;
         reservesManager = reservesManager_;
         distributor = distributor_;
-        bonusDistributor = bonusDistributor_;
         periodBegin = periodBegin_;
         periodEnd = periodBegin_.add(periodDuration_);
-        bonusEnd = periodBegin_.add(bonusDuration_);
     }
 
     function distributorTotalShares() public view returns (uint totalShares) {
         return IOwnedDistributor(distributor).totalShares();
-    }
-
-    function bonusDistributorTotalShares() public view returns (uint totalShares) {
-        return IOwnedDistributor(bonusDistributor).totalShares();
     }
 
     function distributorRecipients(address account)
@@ -647,18 +634,6 @@ contract LiquidityGenerator {
         )
     {
         return IOwnedDistributor(distributor).recipients(account);
-    }
-
-    function bonusDistributorRecipients(address account)
-        public
-        view
-        returns (
-            uint shares,
-            uint lastShareIndex,
-            uint credit
-        )
-    {
-        return IOwnedDistributor(bonusDistributor).recipients(account);
     }
 
     function postponeUnlockTimestamp(uint newUnlockTimestamp) public {
@@ -733,13 +708,6 @@ contract LiquidityGenerator {
         require(msg.value >= 1e17, "LiquidityGenerator: INVALID_VALUE");        // minium is 0.1 FTM
         require(msg.value <= 1e22, "LiquidityGenerator: INVALID_VALUE");        // maxium is 10K FTM
         
-        (uint _prevSharesBonus, , ) = IOwnedDistributor(bonusDistributor).recipients(msg.sender);
-        uint _newSharesBonus = _prevSharesBonus;
-        if (blockTimestamp < bonusEnd) {
-            _newSharesBonus = _prevSharesBonus.add(msg.value);
-            IOwnedDistributor(bonusDistributor).editRecipient(msg.sender, _newSharesBonus);
-        }
-        
         (uint _prevShares, , ) = IOwnedDistributor(distributor).recipients(msg.sender);
         uint _newShares = _prevShares.add(msg.value);
         IOwnedDistributor(distributor).editRecipient(msg.sender, _newShares);
@@ -748,9 +716,7 @@ contract LiquidityGenerator {
             msg.sender,
             msg.value,
             distributorTotalShares(),
-            bonusDistributorTotalShares(),
-            _newShares,
-            _newSharesBonus
+            _newShares
         );
     }
 
