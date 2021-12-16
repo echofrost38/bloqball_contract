@@ -34,7 +34,7 @@ abstract contract ReentrancyGuard {
 
     uint256 private _status;
 
-    constructor () internal {
+    constructor () {
         _status = _NOT_ENTERED;
     }
 
@@ -879,7 +879,7 @@ abstract contract Ownable is Context {
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
      */
-    constructor () internal {
+    constructor () {
         address msgSender = _msgSender();
         _owner = msgSender;
         emit OwnershipTransferred(address(0), msgSender);
@@ -1059,10 +1059,10 @@ contract MasterChef is Ownable, ReentrancyGuard {
     event ReferralCommissionPaid(address indexed user, address indexed referrer, uint256 commissionAmount);
     event RewardLockedUp(address indexed user, uint256 indexed pid, uint256 amountLockedUp);
 
-    constructor(
+    constructor (
         BQBToken _BloqBall,
         BlogBallRouter _BQBRouter
-    ) public {
+    ) {
         BloqBall = _BloqBall;
         BQBRouter = _BQBRouter;
 
@@ -1185,7 +1185,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
     
     // Return total reward multiplier over the given _from to _to block.
-    function getTotalBQBRewardFromBlock() public view returns (uint256) {
+    function getTotalBQBRewardFromBlock() private view returns (uint256) {
         if (!enableStartBQBReward)
             return 0;
             
@@ -1213,7 +1213,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
     
     // Return reward multiplier over the given _from to _to block.
-    function getBQBRewardFromBlock(uint256 _pid) private view returns (uint256) {
+    function getBQBRewardFromBlock(uint256 _pid) public view returns (uint256) {
         if (!enableStartBQBReward)
             return 0;
             
@@ -1254,9 +1254,13 @@ contract MasterChef is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accBloqBallPerShare = pool.accBloqBallPerShare;
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.totalStakedTokens; //pool.lpToken.balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 BloqBallReward = getBQBRewardFromBlock(_pid).mul(pool.allocPoint).div(totalAllocPoint);
+
+            if (address(pool.lpToken) == address(BloqBall))
+                BloqBallReward = BloqBallReward.add(totalAmountFromFeeByRewards);
+
             accBloqBallPerShare = accBloqBallPerShare.add(BloqBallReward.mul(1e12).div(lpSupply));
         }
         
@@ -1320,7 +1324,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.totalStakedTokens; //pool.lpToken.balanceOf(address(this));
 
         if (lpSupply == 0 || pool.allocPoint == 0) {
             pool.lastRewardBlock = block.number;
@@ -1328,12 +1332,15 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
 
         uint256 BloqBallReward = getBQBRewardFromBlock(_pid).mul(pool.allocPoint).div(totalAllocPoint);
-        BloqBallReward = BloqBallReward.add(totalAmountFromFeeByRewards);
-        totalAmountFromFeeByRewards = 0;
                
 //      BloqBall.mint(devAddress, BloqBallReward.div(10));
         BloqBall.mint(address(this), BloqBallReward);
         
+        if (address(pool.lpToken) == address(BloqBall)) {
+            BloqBallReward = BloqBallReward.add(totalAmountFromFeeByRewards);
+            totalAmountFromFeeByRewards = 0;
+        }
+
         pool.accBloqBallPerShare = pool.accBloqBallPerShare.add(BloqBallReward.mul(1e12).div(lpSupply));
         pool.lastRewardBlock = block.number;
     }
