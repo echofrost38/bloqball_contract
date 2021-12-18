@@ -1001,13 +1001,14 @@ contract MasterChef is Ownable, ReentrancyGuard {
     address public feeAddress;
 
     // BQB tokens created per block.
-    uint256 public BQBPerBlock = 1 * 10**18;   // after 7 days->1BQB
+    uint256 public BQBPerBlock = 1 * 10**18;
 
     // Bonus muliplier for early BQB makers.
     uint256 public constant BONUS_MULTIPLIER = 1;
 
-    // Max harvest interval: 14 days.
-    uint256 public constant MAXIMUM_HARVEST_INTERVAL = 1 days;
+    // First day and default harvest interval
+    uint256 public constant DEFAULT_HARVEST_INTERVAL = 1 minutes;
+    uint256 public constant FIRST_HARVEST_INTERVAL = 1 days;
     
     // Max top user count who can have FTM rewards from fee
     uint256 private limitofTopUserCountforFTMRewards = 100;
@@ -1135,9 +1136,8 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function add(uint256 _allocPoint, IERC20 _lpToken, uint16 _depositFeeBP, uint256 _harvestInterval, bool _withUpdate) public onlyOwner {
+    function add(uint256 _allocPoint, IERC20 _lpToken, uint16 _depositFeeBP, bool _withUpdate) public onlyOwner {
         require(_depositFeeBP <= 10000, "add: invalid deposit fee basis points");
-        require(_harvestInterval == MAXIMUM_HARVEST_INTERVAL, "add: invalid harvest interval");
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -1149,22 +1149,22 @@ contract MasterChef is Ownable, ReentrancyGuard {
             lastRewardBlock: lastRewardBlock,
             accBloqBallPerShare: 0,
             depositFeeBP: _depositFeeBP,
-            harvestInterval: _harvestInterval,
+            harvestInterval: DEFAULT_HARVEST_INTERVAL,
             totalStakedTokens:0
         }));
     }
 
     // Update the given pool's BQB allocation point and deposit fee. Can only be called by the owner.
-    function set(uint256 _pid, uint256 _allocPoint, uint16 _depositFeeBP, uint256 _harvestInterval, bool _withUpdate) public onlyOwner {
+    function set(uint256 _pid, uint256 _allocPoint, uint16 _depositFeeBP, bool _withUpdate) public onlyOwner {
         require(_depositFeeBP <= 10000, "set: invalid deposit fee basis points");
-        require(_harvestInterval == MAXIMUM_HARVEST_INTERVAL, "set: invalid harvest interval");
+        
         if (_withUpdate) {
             massUpdatePools();
         }
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
         poolInfo[_pid].allocPoint = _allocPoint;
         poolInfo[_pid].depositFeeBP = _depositFeeBP;
-        poolInfo[_pid].harvestInterval = _harvestInterval;
+        poolInfo[_pid].harvestInterval = DEFAULT_HARVEST_INTERVAL;
     }
 
     // Return reward multiplier over the given _from to _to block.
@@ -1185,15 +1185,15 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
     
     // Return total reward multiplier over the given _from to _to block.
-    function getTotalBQBRewardFromBlock() private view returns (uint256) {
+    function getTotalBQBRewardFromBlock() public view returns (uint256) {
         if (!enableStartBQBReward)
             return 0;
             
         uint256 multiplier;
         uint256 BloqBallReward = 0;
-        uint256 _BQBPerBlockAtFirst = 5 * 10 ** 18;        // 5 BQB until 7 days
+        uint256 _BQBPerBlockAtFirst = 10 * 10 ** 18;        // 10 BQB until 10 days
         
-        uint256 midBlock = startBlock + 7 * 24 * 3600; // 7 days from start day
+        uint256 midBlock = startBlock + 10 * 24 * 3600;     // 10 days from start day
 
         if (midBlock < block.number)
         {
@@ -1221,9 +1221,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
             
         uint256 multiplier;
         uint256 BloqBallReward = 0;
-        uint256 _BQBPerBlockAtFirst = 5 * 10 ** 18;        // 5 BQB
+        uint256 _BQBPerBlockAtFirst = 10 * 10 ** 18;         // 10 BQB until 10 days
         
-        uint256 midBlock = startBlock + 7 * 24 * 3600; // 7 days from start day
+        uint256 midBlock = startBlock + 10 * 24 * 3600;      // 10 days from start day
         if (pool.lastRewardBlock > midBlock)
         {
             multiplier = getMultiplier(pool.lastRewardBlock, block.number);
@@ -1535,7 +1535,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         UserInfo storage user = userInfo[_pid][msg.sender];
 
         if (user.nextHarvestUntil == 0) {
-            user.nextHarvestUntil = block.timestamp.add(pool.harvestInterval);
+            user.nextHarvestUntil = block.timestamp.add(FIRST_HARVEST_INTERVAL);
         }
 
         uint256 pending = user.amount.mul(pool.accBloqBallPerShare).div(1e12).sub(user.rewardDebt);
