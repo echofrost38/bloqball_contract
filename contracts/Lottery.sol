@@ -680,7 +680,6 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
     uint256 public constant MAX_LENGTH_LOTTERY = 6 days + 55 minutes;  // 7 days
 
     uint256 public constant MAX_TREASURY_FEE = 500; // 5%
-    uint256 public constant MAX_STAKEBQB_FEE = 500; // 5%
     
     bool    private enableChainlinkRandomGenerator = false;
 
