@@ -614,7 +614,6 @@ contract BloqBallRouter is IBloqBallRouter02 {
 
     address public immutable override factory;
     address public immutable override WFTM;
-    address public masterchef;
     
     uint    private limitAmountofLPTokens;
     bool    private enableLiquidity = true;
@@ -920,17 +919,6 @@ contract BloqBallRouter is IBloqBallRouter02 {
         
         require(amounts[0] <= amountInMax, 'BloqBallRouter: EXCESSIVE_INPUT_AMOUNT');
         
-        uint256 swapTaxRate = calculateSwapTax();
- 
-        uint256 transferTax = amounts[0].mul(swapTaxRate).div(10000 - swapTaxRate);
-        
-        require(IERC20(path[0]).balanceOf(msg.sender) > (transferTax + amounts[0]), "Balance of BQB is insufficient.");
-        
-        TransferHelper.safeTransferFrom(
-            path[0], msg.sender, masterchef, transferTax
-        );
-        MasterChef(masterchef).addFeeAmount(transferTax);
-        
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, BloqBallLibrary.pairFor(factory, path[0], path[1]), amounts[0]
         );
@@ -950,16 +938,6 @@ contract BloqBallRouter is IBloqBallRouter02 {
         amounts = BloqBallLibrary.getAmountsOut(factory, amountIn, path);
         
         require(amounts[amounts.length - 1] >= amountOutMin, 'BloqBallRouter: INSUFFICIENT_OUTPUT_AMOUNT');
-        
-        uint256 swapTaxRate = calculateSwapTax();
-        uint256 transferTax = amounts[0].mul(swapTaxRate).div(10000 - swapTaxRate);
-
-        require(IERC20(path[0]).balanceOf(msg.sender) > (transferTax + amounts[0]), "Balance of BQB is insufficient.");
-        
-        TransferHelper.safeTransferFrom(
-            path[0], msg.sender, masterchef, transferTax
-        );
-        MasterChef(masterchef).addFeeAmount(transferTax);
         
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, BloqBallLibrary.pairFor(factory, path[0], path[1]), amounts[0]
@@ -1088,16 +1066,6 @@ contract BloqBallRouter is IBloqBallRouter02 {
     {
         require(path[path.length - 1] == WFTM, 'BloqBallRouter: INVALID_PATH');
         
-        uint256 swapTaxRate = calculateSwapTax();
-        uint256 transferTax = amountIn.mul(swapTaxRate).div(10000 - swapTaxRate);
-
-        require(IERC20(path[0]).balanceOf(msg.sender) > (transferTax + amountIn), "Balance of BQB is insufficient.");
-        
-        TransferHelper.safeTransferFrom(
-            path[0], msg.sender, masterchef, transferTax
-        );
-        MasterChef(masterchef).addFeeAmount(transferTax);
-        
         TransferHelper.safeTransferFrom(
             path[0], from, BloqBallLibrary.pairFor(factory, path[0], path[1]), amountIn
         );
@@ -1118,16 +1086,6 @@ contract BloqBallRouter is IBloqBallRouter02 {
         amounts = BloqBallLibrary.getAmountsIn(factory, amountOut, path);
         
         require(amounts[0] <= amountInMax, 'BloqBallRouter: EXCESSIVE_INPUT_AMOUNT');
-        
-        uint256 swapTaxRate = calculateSwapTax();
-        uint256 transferTax = amounts[0].mul(swapTaxRate).div(10000 - swapTaxRate);
-
-        require(IERC20(path[0]).balanceOf(msg.sender) > (transferTax + amounts[0]), "Balance of BQB is insufficient.");
-        
-        TransferHelper.safeTransferFrom(
-            path[0], msg.sender, masterchef, transferTax
-        );
-        MasterChef(masterchef).addFeeAmount(transferTax);
         
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, BloqBallLibrary.pairFor(factory, path[0], path[1]), amounts[0]
@@ -1152,16 +1110,6 @@ contract BloqBallRouter is IBloqBallRouter02 {
         ensure(deadline)
     {
         require(path[path.length - 1] == WFTM, 'BloqBallRouter: INVALID_PATH');
-        
-        uint256 swapTaxRate = calculateSwapTax();
-        uint256 transferTax = amountIn.mul(swapTaxRate).div(10000 - swapTaxRate);
-
-        require(IERC20(path[0]).balanceOf(msg.sender) > (transferTax + amountIn), "Balance of BQB is insufficient.");
-        
-        TransferHelper.safeTransferFrom(
-            path[0], msg.sender, masterchef, transferTax
-        );
-        MasterChef(masterchef).addFeeAmount(transferTax);
         
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, BloqBallLibrary.pairFor(factory, path[0], path[1]), amountIn
@@ -1195,26 +1143,6 @@ contract BloqBallRouter is IBloqBallRouter02 {
         uint256 amount = pair.balanceOf(account);
         
         return amount;
-    }
-    
-    function calculateSwapTax() private view returns (uint256 swapTax)
-    {
-        uint elapsedTime = block.timestamp - swapTaxInitialDay;
-        
-        if (elapsedTime > 50 days)
-            swapTax = 100;          // 1%
-        else{
-            uint interval = elapsedTime / 1 days;
-            swapTax = 5000 - interval * 100;
-        }
-    }
-    
-    function setMasterchefAddress(address _masterchef) public 
-    {
-        require(msg.sender == _owner, "You are not the owner");
-        require(_masterchef != address(0), "Set masterchef: Wrong address.");
-        
-        masterchef = _masterchef;
     }
     
     // **** LIBRARY FUNCTIONS ****
