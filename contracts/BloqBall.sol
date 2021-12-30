@@ -1090,7 +1090,7 @@ contract BQBToken is ERC20, Ownable {
     uint256 private totalMintedBQBofDev = 0;
     uint256 constant MAXIMUM_TRANSFER_TO_DEVELOPER = 10000000 * 10 ** 18;        // 10M BQB for developer
     uint256 constant MAXIMUM_TRANSFER_TO_DEVELOPER_MONTHLY = 200000 * 10 ** 18;     // 200K BQB
-    uint constant MAXIMUM_UPDATE_CONTRACT = 3;
+    uint constant MAXIMUM_UPDATE_CONTRACT = 100;
     uint private _updateLotteryCount;
     uint private _updateMasterchefCount;
     uint private _updateRouterCount;

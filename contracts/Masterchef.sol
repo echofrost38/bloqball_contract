@@ -1303,6 +1303,10 @@ contract MasterChef is Ownable, ReentrancyGuard {
         return block.timestamp >= user.nextHarvestFTMUntil;
     }
 
+    // View function to see user's deposit list.
+    function getDepositInfo(uint256 _pid, address _user) public view returns (DepositInfo[] memory) {
+        return depositInfo[_user][_pid];
+    }
     // Update reward variables for all pools. Be careful of gas spending!
     function massUpdatePools() public {
         require(enableStaking == true, 'Update: DISABLE');

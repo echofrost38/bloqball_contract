@@ -605,10 +605,6 @@ interface IWFTM {
     function withdraw(uint) external;
 }
 
-interface MasterChef {
-    function addFeeAmount(uint256 amount) external;
-}
-
 contract BloqBallRouter is IBloqBallRouter02 {
     using SafeMath for uint;
 
