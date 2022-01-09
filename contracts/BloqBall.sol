@@ -1027,9 +1027,19 @@ interface MasterChef {
     function addTransferFee(uint256 amount) external;
 }
 
+interface BloqBallRouter {
+    function getAmountsOut(uint amountIn, address[] memory path) external;
+}
+
 interface BloqBallLottery {
     function checkLotteryState() external;
     function getOperator() external view returns (address);
+}
+
+interface BloqBallTreasury {
+    function depositTreasury(uint256 _amount) external;
+    function getOperator() external returns (address);
+    function comparePriceAndBuyback() external;
 }
 
 // File: contracts/BloqBall.sol
@@ -1041,7 +1051,6 @@ contract BQBToken is ERC20, Ownable {
     
     // Burn rate % of transfer tax.
     uint16 public burnRate = 0;             // 0% of transfer tax
-    
     uint16 public liquidityRate = 0;        // 0% of transfer tax
     
     // Max transfer tax rate: 10%.
@@ -1075,10 +1084,13 @@ contract BQBToken is ERC20, Ownable {
     address public bloqballPair;
     
     // Masterchef address
-    address public bloqBallMasterchef;
+    address public bloqballMasterchef;
     
     // Lottery address
-    address public bloqballlottery; 
+    address public bloqballlottery;
+
+    // Treasury address
+    address public bloqballTreasury; 
     
     // In swap and liquify
     bool private _inSwapAndLiquify;
@@ -1095,6 +1107,8 @@ contract BQBToken is ERC20, Ownable {
     uint private _updateMasterchefCount;
     uint private _updateRouterCount;
 
+    uint public limitRateForTreasury;
+
     // Events
     event OperatorTransferred(address indexed previousOperator, address indexed newOperator);
     event TransferTaxRateUpdated(address indexed operator, uint256 previousRate, uint256 newRate);
@@ -1103,7 +1117,8 @@ contract BQBToken is ERC20, Ownable {
     event SwapAndLiquifyEnabledUpdated(address indexed operator, bool enabled);
     event MinAmountToLiquifyUpdated(address indexed operator, uint256 previousAmount, uint256 newAmount);
     event BloqBallRouterUpdated(address indexed operator, address indexed router, address indexed pair);
-    event BloqMasterchefUpdated(address indexed operator, address indexed masterchef);
+    event BloqBallMasterchefUpdated(address indexed operator, address indexed masterchef);
+    event BloqBallTreasuryUpdated(address indexed operator, address indexed treasury);
     event SwapAndLiquify(uint256 tokensSwapped, uint256 ethReceived, uint256 tokensIntoLiqudity);
 
     modifier onlyOperator() {
@@ -1239,15 +1254,27 @@ contract BQBToken is ERC20, Ownable {
                 super._transfer(sender, BURN_ADDRESS, burnAmount);
             
             // send fee to masterchef
-            if (bloqBallMasterchef != address(0) && stakeAmount > 0)
+            if (bloqballMasterchef != address(0) && stakeAmount > 0)
             {
-                super._transfer(sender, bloqBallMasterchef, stakeAmount);
-                MasterChef(bloqBallMasterchef).addTransferFee(stakeAmount);
+                super._transfer(sender, bloqballMasterchef, stakeAmount);
+                MasterChef(bloqballMasterchef).addTransferFee(stakeAmount);
             }
             
-            if (bloqballlottery != address(0) && BloqBallLottery(bloqballlottery).getOperator() == address(this))
+            // check the status of lottery
+            if (bloqballlottery != address(0) 
+                && BloqBallLottery(bloqballlottery).getOperator() == address(this))
             {
                 BloqBallLottery(bloqballlottery).checkLotteryState();
+            }
+
+            // check the current price of BQB for treasury when swapping
+            if (bloqballPair != address(0) 
+                && (sender == bloqballPair || recipient == bloqballPair) 
+                && bloqballTreasury != address(0) 
+                && address(bloqballRouter) != address(0) 
+                && limitRateForTreasury > 0 
+                && BloqBallTreasury(bloqballTreasury).getOperator() == address(this)) {
+                checkTreasuryProc();
             }
             
             if (addliquidity)
@@ -1444,9 +1471,46 @@ contract BQBToken is ERC20, Ownable {
         
         require(_updateMasterchefCount <= MAXIMUM_UPDATE_CONTRACT, "Update Masterchef: too much updating Masterchef.");
         
-        bloqBallMasterchef = _masterchef;
+        bloqballMasterchef = _masterchef;
         
-        emit BloqMasterchefUpdated(msg.sender, bloqBallMasterchef);
+        emit BloqBallMasterchefUpdated(msg.sender, bloqballMasterchef);
+    }
+
+    function setTreasury(address _treasury) public onlyOperator {
+        require(_treasury != address(0), "Update treasury: Wrong address.");
+      
+        bloqballTreasury = _treasury;
+        
+        emit BloqBallTreasuryUpdated(msg.sender, bloqballTreasury);
+    }
+
+    function setlimitPriceForTreasury(uint256 _limitRateForTreasury) public onlyOwner {
+        limitRateForTreasury = _limitRateForTreasury;
+    }
+
+    function checkTreasuryProc() public {
+        require(bloqballTreasury != address(0), "BloqBall Treasury: Wrong address.");
+        require(address(bloqballRouter) != address(0), "BloqBall Router: Wrong address.");
+        require(limitRateForTreasury > 0, "limitRateForTreasury: Wrong value.");
+
+        address[] memory path = new address[](2);
+        path[0] = address(this);
+        path[1] = bloqballRouter.WFTM();
+
+        uint256 amountIn = 1 * 10 ** 18;
+        uint[] memory amounts = bloqballRouter.getAmountsOut(amountIn, path);
+        uint256 rate = amounts[1];
+
+        if (rate > (limitRateForTreasury * 120 / 100)) {
+            uint mintAmount;
+            mintAmount = (totalSupply() - 10000000 * 10 ** 18) / 1000;
+            _mint(bloqballTreasury, mintAmount);
+            BloqBallTreasury(bloqballTreasury).depositTreasury(mintAmount);
+
+            limitRateForTreasury = rate;
+        }
+
+        BloqBallTreasury(bloqballTreasury).comparePriceAndBuyback();
     }
 
     /**

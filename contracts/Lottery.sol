@@ -694,6 +694,9 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
     
     uint256 private minPendingInjectionNextLotteryForWeeklyLottery = 50000 * 10 ** 18;  // 50k BQB
     uint256 private minPrizeReserveForWeeklyLottery = 30000 * 10 ** 18;                 // 30k BQB
+    uint256 private maxRewardPerClaim = 50000 * 10 ** 18;                               // 50k BQB
+    uint256 private MAX_CLIMABLE_PEROID = 1 weeks;
+
             
     bool private weeklyLottery = false;
     
@@ -728,6 +731,12 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
         address owner;
     }
 
+    struct UserInfo {
+        uint256 rewardAmount;             // How many LP tokens the user has provided.
+        uint256 nextHarvestUntil;   // When can the user harvest again.
+        uint256 remainedRewards;
+    }
+
     // Mapping are cheaper than arrays
     mapping(uint256 => Lottery) private _lotteries;
     mapping(uint256 => Ticket) private _tickets;
@@ -737,6 +746,9 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
     
    // Keep track of user wining rewards for a given lotteryId
     mapping(address => mapping(uint256 => uint256)) public _userWiningRewardsPerLotteryId;
+
+   // Keep track of user remainded wining rewards for a given lotteryId
+    mapping(address => mapping(uint256 => UserInfo)) public _userRewardsInfoPerLotteryId;
 
     modifier notContract() {
         require(!_isContract(msg.sender), "Contract not allowed");
@@ -1038,6 +1050,8 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
             
             pendingRewards += _lotteries[_lotteryId].BQBPerBracket[_brackets[i]];
         }
+
+        pendingRewards += _userRewardsInfoPerLotteryId[_account][_lotteryId].remainedRewards;
     }
         
     /**
@@ -1115,12 +1129,46 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
             rewardInBQBToTransfer += rewardForTicketId;
         }
 
-        // Transfer money to msg.sender
-        IERC20(address(bqbToken)).safeTransfer(msg.sender, rewardInBQBToTransfer);
-        
-        _userWiningRewardsPerLotteryId[msg.sender][_lotteryId] += rewardInBQBToTransfer;
+        if (rewardInBQBToTransfer > maxRewardPerClaim || 
+                (rewardInBQBToTransfer == 0 
+                    && _userRewardsInfoPerLotteryId[msg.sender][_lotteryId].remainedRewards > 0)) {
+            if (rewardInBQBToTransfer > maxRewardPerClaim) {
+                _userRewardsInfoPerLotteryId[msg.sender][_lotteryId] = 
+                                                        UserInfo({rewardAmount:rewardInBQBToTransfer / 10,
+                                                                  nextHarvestUntil: 0,
+                                                                  remainedRewards: rewardInBQBToTransfer});
+            }
 
-        emit TicketsClaim(msg.sender, rewardInBQBToTransfer, _lotteryId, _ticketIds.length);
+            if (_userRewardsInfoPerLotteryId[msg.sender][_lotteryId].nextHarvestUntil > block.timestamp)
+                return;
+
+            UserInfo memory userInfo = _userRewardsInfoPerLotteryId[msg.sender][_lotteryId];
+            uint rewards;
+
+            if (userInfo.rewardAmount > userInfo.remainedRewards) {
+                rewards = userInfo.remainedRewards;
+            }
+            else {
+                rewards = userInfo.rewardAmount;
+            }
+
+            IERC20(address(bqbToken)).safeTransfer(msg.sender, rewards);
+
+            _userRewardsInfoPerLotteryId[msg.sender][_lotteryId].remainedRewards -= rewards;
+            _userRewardsInfoPerLotteryId[msg.sender][_lotteryId].nextHarvestUntil = block.timestamp + MAX_CLIMABLE_PEROID;
+
+            _userWiningRewardsPerLotteryId[msg.sender][_lotteryId] += rewards;
+
+            emit TicketsClaim(msg.sender, rewards, _lotteryId, _ticketIds.length);
+        }
+        else if (rewardInBQBToTransfer > 0 && rewardInBQBToTransfer < maxRewardPerClaim) {
+            // Transfer money to msg.sender
+            IERC20(address(bqbToken)).safeTransfer(msg.sender, rewardInBQBToTransfer);
+
+            _userWiningRewardsPerLotteryId[msg.sender][_lotteryId] += rewardInBQBToTransfer;
+
+            emit TicketsClaim(msg.sender, rewardInBQBToTransfer, _lotteryId, _ticketIds.length);
+        }
     }
 
     /**

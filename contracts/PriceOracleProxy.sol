@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity 0.6.12;
 
 interface AggregatorV3Interface {
 
@@ -78,6 +78,11 @@ contract PriceConsumerV3 {
             uint timeStamp,
             uint80 answeredInRound
         ) = priceFeed.latestRoundData();
+        return price;
+    }
+
+      function getLatestPrice11() external view returns (int) {
+        (, int price, , , ) = priceFeedOfFTM.latestRoundData();
         return price;
     }
 }
