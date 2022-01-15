@@ -1237,6 +1237,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
         uint256 accBloqBallPerShare = pool.accBloqBallPerShare;
         uint256 lpSupply = pool.totalStakedTokens; //pool.lpToken.balanceOf(address(this));
 
+        if (lpSupply == 0)
+            return 0;
+
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 bloqBallReward = getBQBRewardFromBlock(_pid).mul(pool.allocPoint).div(totalAllocPoint);
 

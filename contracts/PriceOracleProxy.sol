@@ -82,7 +82,7 @@ contract PriceConsumerV3 {
     }
 
       function getLatestPrice11() external view returns (int) {
-        (, int price, , , ) = priceFeedOfFTM.latestRoundData();
+        (, int price, , , ) = priceFeed.latestRoundData();
         return price;
     }
 }

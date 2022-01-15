@@ -705,215 +705,6 @@ library SafeERC20 {
     }
 }
 
-pragma solidity >=0.5.0;
-
-interface IUniswapV2Router01 {
-    function factory() external pure returns (address);
-
-    function WETH() external pure returns (address);
-
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 amountADesired,
-        uint256 amountBDesired,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    )
-        external
-        returns (
-            uint256 amountA,
-            uint256 amountB,
-            uint256 liquidity
-        );
-
-    function addLiquidityETH(
-        address token,
-        uint256 amountTokenDesired,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    )
-        external
-        payable
-        returns (
-            uint256 amountToken,
-            uint256 amountETH,
-            uint256 liquidity
-        );
-
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETH(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapTokensForExactTokens(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactETHForTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function swapTokensForExactETH(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactTokensForETH(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapETHForExactTokens(
-        uint256 amountOut,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function quote(
-        uint256 amountA,
-        uint256 reserveA,
-        uint256 reserveB
-    ) external pure returns (uint256 amountB);
-
-    function getAmountOut(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountOut);
-
-    function getAmountIn(
-        uint256 amountOut,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountIn);
-
-    function getAmountsOut(uint256 amountIn, address[] calldata path)
-        external
-        view
-        returns (uint256[] memory amounts);
-
-    function getAmountsIn(uint256 amountOut, address[] calldata path)
-        external
-        view
-        returns (uint256[] memory amounts);
-}
-
-interface IUniswapV2Router02 is IUniswapV2Router01 {
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountETH);
-
-    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountETH);
-
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable;
-
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-}
-
-
 interface IBloqBallRouter01 {
     function factory() external pure returns (address);
     function WFTM() external pure returns (address);
@@ -1111,10 +902,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     address public bloqballRouter;
     address public WFTM;
     address public lpToken;
-    address public treasuryToken;
-    address public uniswapRouter;
 
-    AggregatorV3Interface internal priceFeedOfTreasuryToken;
     AggregatorV3Interface internal priceFeedOfFTM;
 
     uint256 private discountRate = 1000;      // 10%
@@ -1123,15 +911,15 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
     uint256 private decimal = 10 ** 18;
 
-    uint256[4] public allocPoints;
+    uint256[2] public allocPoints;
 
     // Info of each pool.
     struct PoolInfo {
         IERC20 token;                       // Address of token contract.
-        uint256 discountRate;               // discount rate
         uint256 totalDepositBQB;            // total count of deposited tokens
         uint256 totalPurchasedBQB;          // total count of purchased tokens
         uint256 remainedBQB;                // total count of remained tokens
+        uint256 totalFund;                  // total count of fund tokens
     }
 
     PoolInfo[] public poolInfo;
@@ -1141,23 +929,32 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         uint256 pid;                        // Pool ID
         uint256 sellAmount;                 // count of sell-token
         uint256 buyAmount;                  // count of buy-token
-        uint256 lockupPeriod;
+        uint256 lockupPeriod;               // lockup period
     }
 
     mapping (address=> mapping(uint=>PurchasedInfo[])) public purchasedInfo;
+
+    // Info of each user.
+    struct UserInfo {
+        uint256 totalSelledToken;           // total count of selled FTM for buying BQB
+        uint256 totalPhurchasedBQB;         // total count of earned BQB by selling FTM
+        uint256 totalEarnedBQB;             // total count of earned BQB by selling FTM/BQB
+        uint256 totalSelledBQB;             // total count of selled BQB for buybacking FTM or FTM/BQB
+        uint256 totalEarnedToken;           // total count of earned FTM by selling BQB
+    }
+
+    mapping (address=> mapping(uint=> UserInfo)) public userInfo;
 
     modifier onlyOperator() {
         require(msg.sender == operatorAddress, "Not operator");
         _;
     }
 
-    event depositBQB(uint256 amount0, uint256 amount1, uint256 amount2, uint256 amount3);
+    event depositBQB(uint256 amount0, uint256 amount1);
     event TokensPurchased(address receiver, address token, uint256 amount, uint256 rate);
     event TokensClaimed(address receiver, uint256 amount);
     event buyBack(address sellToken, uint sellAmount, uint buyAmount);
     event burnBQB(address token, uint256 amount);
-    event UpdateUniswapRouter(address newAddress, address oldAddress);
-    event UpdateTreasuryToken(address newAddress, address oldAddress);
     event NewOperatorAddresses(address newAddress);
 
     /**
@@ -1167,35 +964,20 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
      * address: 0xf4766552D15AE4d256Ad41B6cf2933482B0680dc in mainnet
      */
 
-    /**
-     * Network: FANTOM
-     * Aggregator: DAI/USD
-     * Address: no in testnet    
-     * address: 0x91d5DEFAFfE2854C7D02F50c80FA1fdc8A721e52 in mainnet
-     */
-
     constructor(
         address _bloqball,
-        address _treasuryToken,
-        address _priceFeedOfTreasurytoken,
-        address _uniswapRouter,
         address _bloqballRouter,
         address _bloqballPair
     ) public {
         bloqball = _bloqball;
-        treasuryToken = _treasuryToken;
-        priceFeedOfTreasuryToken = AggregatorV3Interface(_priceFeedOfTreasurytoken);
-        uniswapRouter = _uniswapRouter;
         bloqballRouter = _bloqballRouter;
         lpToken = _bloqballPair;
 
         WFTM = IBloqBallRouter01(bloqballRouter).WFTM();
         priceFeedOfFTM = AggregatorV3Interface(0xe04676B9A9A2973BCb0D1478b5E1E9098BBB7f3D);
 
-        allocPoints[0] = 2500;
-        allocPoints[1] = 2500;
-        allocPoints[2] = 2500;
-        allocPoints[3] = 2500;
+        allocPoints[0] = 5000;
+        allocPoints[1] = 5000;
 
         operatorAddress = msg.sender;
     }
@@ -1204,33 +986,30 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     }
 
     // Add a new token to the pool. Can only be called by the owner.
-    function add(IERC20 _token, uint16 _discountRate) public onlyOwner {
+    function add(IERC20 _token) public onlyOwner {
         require(address(_token) != address(this), "token : Wrong address");
         poolInfo.push(PoolInfo({
             token: _token,
-            discountRate: _discountRate,
             totalDepositBQB: 0,
             totalPurchasedBQB: 0,
-            remainedBQB: 0
+            remainedBQB: 0,
+            totalFund: 0
         }));
     }
 
-    function set(uint _pid, IERC20 _token, uint16 _discountRate, uint256 _totalDespositBQB, 
+    function set(uint _pid, IERC20 _token, uint256 _totalDespositBQB, 
                 uint256 _totalPurchasedBQB, uint256 _remainedBQB) public onlyOwner {
         require(address(_token) != address(this), "token : Wrong address");
         poolInfo[_pid].token = _token;
-        poolInfo[_pid].discountRate = _discountRate;
         poolInfo[_pid].totalDepositBQB = _totalDespositBQB;
         poolInfo[_pid].totalPurchasedBQB = _totalPurchasedBQB;
         poolInfo[_pid].remainedBQB = _remainedBQB;
     }
 
-    function setAllocpoint(uint256[4] memory _allocPoints) public onlyOwner {
+    function setAllocpoint(uint256[2] memory _allocPoints) public onlyOwner {
         require(
             (_allocPoints[0] +
-                _allocPoints[1] +
-                _allocPoints[2] +
-                _allocPoints[3]) == 10000,
+                _allocPoints[1]) == 10000,
             "Rewards must equal 10000"
         );
 
@@ -1238,77 +1017,45 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     }
 
     function depositTreasury(uint256 _amount) external onlyOperator {
-        uint256[4] memory amount;
+        uint256[2] memory amount;
 
         amount[0] = _amount.mul(allocPoints[0]).div(10000);
         amount[1] = _amount.mul(allocPoints[1]).div(10000);
-        amount[2] = _amount.mul(allocPoints[2]).div(10000);
-        amount[3] = _amount.sub(amount[0]).sub(amount[1]).sub(amount[2]);
 
-        swapTokensForFTM(amount[0]);
-        swapTokensForTreasuryToken(amount[1]);
+        poolInfo[0].totalDepositBQB = amount[0];
+        poolInfo[0].remainedBQB = amount[0];
 
-        poolInfo[0].totalDepositBQB = amount[2];
-        poolInfo[0].remainedBQB = amount[2];
-
-        poolInfo[1].totalDepositBQB = amount[3];
-        poolInfo[1].remainedBQB = amount[2];
+        poolInfo[1].totalDepositBQB = amount[1];
+        poolInfo[1].remainedBQB = amount[1];
 
         // emit an event when tokens are deposited
-        emit depositBQB(amount[0], amount[1], amount[2], amount[3]);
-    }
-
-    function swapTokensForFTM(uint256 _bloqballAmount) private {
-        address[] memory path = new address[](2);
-        path[0] = bloqball;
-        path[1] = WFTM;
-
-        // make the swap
-        IERC20(bloqball).approve(bloqballRouter, _bloqballAmount);
-        IBloqBallRouter02(bloqballRouter).swapExactTokensForFTMSupportingFeeOnTransferTokens(
-          _bloqballAmount,
-          0, // accept any amount of ETH
-          path,
-          address(this),
-          block.timestamp
-        );
-    }
-
-    function swapTokensForTreasuryToken(uint256 _bloqballAmount) private {
-        address[] memory path = new address[](3);
-        path[0] = bloqball;
-        path[1] = IUniswapV2Router01(uniswapRouter).WETH();
-        path[2] = treasuryToken;
-
-        // make the swap
-        IERC20(bloqball).approve(uniswapRouter, _bloqballAmount);
-        IUniswapV2Router02(uniswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-          _bloqballAmount,
-          0,
-          path,
-          address(this),
-          block.timestamp
-        );
+        emit depositBQB(amount[0], amount[1]);
     }
 
     function buyBQBWithFTM(uint256 _lockupPeriod) public payable {
         require(msg.value > 0, "Insufficient value");
 
-        uint rate = calculateRateFTM2BQB();
-        uint tokenAmount = msg.value.mul(rate).div(decimal);
-        tokenAmount = tokenAmount.add(tokenAmount.mul(poolInfo[0].discountRate).div(10000));
+        uint256 rate = calculateRateFTM2BQB();
+        uint256 tokenAmount = msg.value.mul(rate).div(decimal);
+
+        uint256 _discountRate = _lockupPeriod.mul(uint256(100));            // 5 days -> add 5%
+        tokenAmount = tokenAmount.add(tokenAmount.mul(_discountRate).div(10000));
 
         // check if the contract has enough tokens
         require(poolInfo[0].remainedBQB >= tokenAmount, "Available BQB not sufficient to complete buying");
 
         poolInfo[0].totalPurchasedBQB = poolInfo[0].totalPurchasedBQB.add(tokenAmount);
         poolInfo[0].remainedBQB = poolInfo[0].remainedBQB.sub(tokenAmount);
+        poolInfo[0].totalFund = poolInfo[0].totalFund.add(msg.value);
+
+        userInfo[msg.sender][0].totalSelledToken = userInfo[msg.sender][0].totalSelledToken.add(msg.value);
+        userInfo[msg.sender][0].totalPhurchasedBQB = userInfo[msg.sender][0].totalPhurchasedBQB.add(tokenAmount);
 
         purchasedInfo[msg.sender][0].push(PurchasedInfo({
             pid: 0,
             sellAmount: msg.value,
             buyAmount: tokenAmount,
-            lockupPeriod:block.timestamp.add(_lockupPeriod)
+            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400))
         }));
 
         // emit an event when tokens are purchased
@@ -1316,21 +1063,27 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     }
 
     function buyBQBWithLP(uint256 _amount, uint256 _lockupPeriod) public {
-        uint rate = calculateRateLP2BQB();
-        uint tokenAmount = _amount.mul(rate).div(decimal);
-        tokenAmount = tokenAmount.add(tokenAmount.mul(poolInfo[1].discountRate).div(10000));
+        uint256 rate = calculateRateLP2BQB();
+        uint256 tokenAmount = _amount.mul(rate).div(decimal);
+
+        uint256 _discountRate = _lockupPeriod.mul(uint(100));            // 5 days -> add 5%
+        tokenAmount = tokenAmount.add(tokenAmount.mul(_discountRate).div(10000));
 
         // check if the contract has enough tokens
         require(poolInfo[1].remainedBQB >= tokenAmount, "Available BQB not sufficient to complete buying");
 
         poolInfo[1].totalPurchasedBQB = poolInfo[1].totalPurchasedBQB.add(tokenAmount);
         poolInfo[1].remainedBQB = poolInfo[1].remainedBQB.sub(tokenAmount);
+        poolInfo[1].totalFund = poolInfo[1].totalFund.add(_amount);
+
+        userInfo[msg.sender][1].totalSelledToken = userInfo[msg.sender][1].totalSelledToken.add(_amount);
+        userInfo[msg.sender][1].totalPhurchasedBQB = userInfo[msg.sender][1].totalPhurchasedBQB.add(tokenAmount);
 
         purchasedInfo[msg.sender][1].push(PurchasedInfo({
             pid: 1,
             sellAmount: _amount,
             buyAmount: tokenAmount,
-            lockupPeriod:block.timestamp.add(_lockupPeriod)
+            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400))
         }));
 
         IERC20(poolInfo[1].token).safeTransferFrom(msg.sender, address(this), _amount);
@@ -1355,18 +1108,22 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     }
 
     function claimBQB(uint256 _pid) public {
-        uint256 totalClaimable = pendingBQB(_pid, msg.sender);
+        uint256 amount = pendingBQB(_pid, msg.sender);
 
-        if (totalClaimable > 0) {
-            IERC20(bloqball).safeTransfer(msg.sender, totalClaimable);
+        require(balanceOfBQB() >= amount, "BQB not sufficient to claim");
+
+        if (amount > 0) {
+            IERC20(bloqball).safeTransfer(msg.sender, amount);
         }
 
+        userInfo[msg.sender][_pid].totalEarnedBQB = userInfo[msg.sender][_pid].totalEarnedBQB.add(amount);
+
         // Remove purchased info in the array
-        removeAmountFromPurchased(msg.sender, _pid, totalClaimable, block.timestamp);
+        removeAmountFromPurchased(msg.sender, _pid, amount, block.timestamp);
         removeEmptyPurchased(msg.sender, _pid);
 
         // emit an event when tokens are claimed
-        emit TokensClaimed(msg.sender, totalClaimable);
+        emit TokensClaimed(msg.sender, amount);
     }
 
     function removeAmountFromPurchased(address _user, uint _pid, uint _amount, uint _time) private {
@@ -1433,6 +1190,16 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         return amountBQB.mul(decimal).div(IERC20(lpToken).totalSupply()); 
     }
 
+    function calculateRateBQB2LP() public view returns (uint256){
+        (uint256 amountBQB, uint256 amountFTM) = 
+                IBloqBallRouter01(bloqballRouter).getReservesOfLiquidity(bloqball, WFTM);
+
+        uint256 rate = calculateRateFTM2BQB();
+        amountBQB = amountBQB.add(amountFTM.mul(rate).div(decimal));
+
+        return IERC20(lpToken).totalSupply().mul(decimal).div(amountBQB); 
+    }
+
     function calculatePriceOfLP() public view returns (uint256){
         uint256 amountBQB = calculateRateLP2BQB();
 
@@ -1443,8 +1210,16 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
         return currentPriceOfBQB.mul(amountBQB).div(decimal);
     }
+
+    function calculatePriceOfBQB() public view returns (uint256){
+        (, int price, , , ) = priceFeedOfFTM.latestRoundData();
+
+        uint256 rate = calculateRateBQB2FTM();
+
+        return uint256(price).mul(rate).div(decimal);
+    }
     
-    function calculatBackingPrice() public view returns (uint256){
+    function calculatBackingPriceOfBQB() public view returns (uint256){
         uint256 totalTreasuryBalance = treasuryBalance();
         uint256 totalSupply = (IERC20(bloqball).totalSupply()).sub(10000000 * decimal);        // sub amount of bqb in lottery
 
@@ -1460,13 +1235,6 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
         uint256 totalPrice = balanceOfToken.mul(uint256(price)).div(decimal);
 
-        // Calculate the total price of treasury token
-        balanceOfToken = balanceOfTreasuryToken();
-
-        (, int price1, , , ) = priceFeedOfTreasuryToken.latestRoundData();
-
-        totalPrice = totalPrice.add(balanceOfToken.mul(uint256(price1)).div(decimal));
-
         // Calculate the total price of LP token
         balanceOfToken = balanceOfLP();
         uint256 priceLP = calculatePriceOfLP();
@@ -1481,30 +1249,25 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
         uint256 currentPriceOfBQB = uint256(price).mul(rate).div(decimal);
 
-        uint256 backingPrice = calculatBackingPrice();
+        uint256 backingPrice = calculatBackingPriceOfBQB();
 
         return (currentPriceOfBQB < backingPrice);
     }
 
-    function comparePriceAndBuyback() public onlyOperator{
+    function buyback() public onlyOperator{
         bool enableBuyBack = isEnableBuyback();
+        require(enableBuyBack, "BuyBack is not available.");
 
-        if (enableBuyBack) {
-            uint256 amount = balanceOfFTM();
-            amount = amount.mul(buybackRate).div(uint(10000));
-            buybackBQBwithFTMfromRouter(amount);
+        uint256 amount = balanceOfFTM();
+        amount = amount.mul(buybackRate).div(uint(10000));
+        buybackBQBforFTMbyRouter(amount);
 
-            amount = balanceOfLP();
-            amount = amount.mul(buybackRate).div(uint(10000));
-            buybackBQBwithLPfromRouter(amount);
-
-            amount = balanceOfTreasuryToken();
-            amount = amount.mul(buybackRate).div(uint(10000));
-            buybackBQBwithTreasuryTokenfromRouter(amount);
-        }
+        amount = balanceOfLP();
+        amount = amount.mul(buybackRate).div(uint(10000));
+        buybackBQBforLPbyRouter(amount);
     }
 
-    function buybackBQBwithFTMfromRouter(uint256 _amountofFTM) private {
+    function buybackBQBforFTMbyRouter(uint256 _amountofFTM) private {
         require(_amountofFTM <= balanceOfFTM(), "Insufficient value");
 
         address[] memory path = new address[](2);
@@ -1522,35 +1285,16 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
             );
 
         uint256 newBalance = IERC20(bloqball).balanceOf(address(this));
+        uint256 difference = newBalance.sub(oldBalance);
 
-        emit buyBack(WFTM, _amountofFTM, newBalance.sub(oldBalance));
+        poolInfo[0].totalDepositBQB = poolInfo[0].totalDepositBQB.add(difference);
+        poolInfo[0].remainedBQB = poolInfo[0].remainedBQB.add(difference);
+        poolInfo[0].totalFund = poolInfo[1].totalFund.sub(_amountofFTM);
+
+        emit buyBack(WFTM, _amountofFTM, difference);
     }
 
-    function buybackBQBwithTreasuryTokenfromRouter(uint256 _amountofTreasuryToken) private {
-        require(_amountofTreasuryToken <= balanceOfTreasuryToken(), "Insufficient value");
-
-        address[] memory path = new address[](3);
-        path[0] = treasuryToken;
-        path[1] = IUniswapV2Router01(uniswapRouter).WETH();
-        path[2] = bloqball;
-
-        uint256 oldBalance = IERC20(bloqball).balanceOf(address(this));
-
-        IERC20(treasuryToken).approve(uniswapRouter, _amountofTreasuryToken);
-        IUniswapV2Router02(uniswapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-          _amountofTreasuryToken,
-          0,
-          path,
-          address(this),
-          block.timestamp
-        );
-
-        uint256 newBalance = IERC20(bloqball).balanceOf(address(this));
-
-        emit buyBack(treasuryToken, _amountofTreasuryToken, newBalance.sub(oldBalance));
-    }
-
-    function buybackBQBwithLPfromRouter(uint256 _amountofLP) private {
+    function buybackBQBforLPbyRouter(uint256 _amountofLP) private {
         require(_amountofLP <= balanceOfLP(), "Insufficient value");
 
         uint256 oldBalance = IERC20(bloqball).balanceOf(address(this));
@@ -1566,11 +1310,16 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         );
 
         uint256 newBalance = IERC20(bloqball).balanceOf(address(this));
+        uint256 difference = newBalance.sub(oldBalance);
+
+        poolInfo[1].totalDepositBQB = poolInfo[1].totalDepositBQB.add(difference);
+        poolInfo[1].remainedBQB = poolInfo[1].remainedBQB.add(difference);
+        poolInfo[0].totalFund = poolInfo[1].totalFund.sub(_amountofLP);
 
         emit buyBack(lpToken, _amountofLP, newBalance.sub(oldBalance));
     }
 
-    function buybackBQBWithFTMfromUser(uint256 _amountofBQB) public {
+    function buybackBQBforFTMbyUser(uint256 _amountofBQB) public {
         bool enableBuyBack = isEnableBuyback();
         require(enableBuyBack, "BuyBack is not available.");
 
@@ -1581,35 +1330,50 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         require(address(this).balance >= tokenAmount, "Available FTM not sufficient to complete buying");
         require(payable(msg.sender).send(tokenAmount));
 
+        uint256 oldBalance = IERC20(bloqball).balanceOf(msg.sender);
         IERC20(bloqball).safeTransferFrom(msg.sender, address(this), _amountofBQB);
+
+        uint256 newBalance = IERC20(bloqball).balanceOf(msg.sender);
+        uint256 difference = oldBalance.sub(newBalance);
+
+        userInfo[msg.sender][0].totalSelledBQB = userInfo[msg.sender][0].totalSelledBQB.add(_amountofBQB);
+        userInfo[msg.sender][0].totalEarnedToken = userInfo[msg.sender][0].totalEarnedToken.add(tokenAmount);
+
+        poolInfo[0].totalDepositBQB = poolInfo[0].totalDepositBQB.add(difference);
+        poolInfo[0].remainedBQB = poolInfo[0].remainedBQB.add(difference);
+        poolInfo[0].totalFund = poolInfo[0].totalFund.sub(tokenAmount);
 
         // emit an event when tokens are purchased
         emit TokensPurchased(msg.sender, WFTM, tokenAmount, rate);
     }
 
-    function buybackBQBWithTreasuryTokenfromUser(uint256 _amountofBQB) public {
+    function buybackBQBforLPbyUser(uint256 _amountofBQB) public {
         bool enableBuyBack = isEnableBuyback();
         require(enableBuyBack, "BuyBack is not available.");
 
-        (, int price, , , ) = priceFeedOfFTM.latestRoundData();
-
-        uint256 rate = calculateRateBQB2FTM();
-        uint256 currentPriceOfBQB = uint256(price).mul(rate).div(decimal);
-
-        (, int currentPriceOfTreasuryToken, , , ) = priceFeedOfTreasuryToken.latestRoundData();
-
-        uint tokenAmount = _amountofBQB.mul(currentPriceOfBQB).
-                                        div(uint256(currentPriceOfTreasuryToken));
+        uint rate = calculateRateBQB2LP();
+        uint tokenAmount = _amountofBQB.mul(rate).div(decimal);
         tokenAmount = tokenAmount.add(tokenAmount.mul(discountRate).div(uint(10000)));
 
-        require(IERC20(treasuryToken).balanceOf(address(this)) >= tokenAmount, 
-                "Available Treasury token not sufficient to complete buying");
+        require(balanceOfLP() >= tokenAmount, "Available FTM/BQB not sufficient to complete buying");
 
+        IERC20(lpToken).safeTransfer(msg.sender, tokenAmount);
+
+        uint256 oldBalance = IERC20(bloqball).balanceOf(msg.sender);
         IERC20(bloqball).safeTransferFrom(msg.sender, address(this), _amountofBQB);
-        IERC20(treasuryToken).transfer(msg.sender, tokenAmount);
+
+        uint256 newBalance = IERC20(bloqball).balanceOf(msg.sender);
+        uint256 difference = oldBalance.sub(newBalance);
+
+        userInfo[msg.sender][1].totalSelledBQB = userInfo[msg.sender][1].totalSelledBQB.add(_amountofBQB);
+        userInfo[msg.sender][1].totalEarnedToken = userInfo[msg.sender][1].totalEarnedToken.add(tokenAmount);
+
+        poolInfo[1].totalDepositBQB = poolInfo[1].totalDepositBQB.add(difference);
+        poolInfo[1].remainedBQB = poolInfo[1].remainedBQB.add(difference);
+        poolInfo[1].totalFund = poolInfo[1].totalFund.sub(tokenAmount);
 
         // emit an event when tokens are purchased
-        emit TokensPurchased(msg.sender, treasuryToken, tokenAmount, rate);
+        emit TokensPurchased(msg.sender, lpToken, tokenAmount, rate);
     }
 
     function setDiscountRateforBuyBackBQB(uint256 _rate) public onlyOwner {
@@ -1636,32 +1400,8 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         return address(this).balance;
     }
 
-    function balanceOfTreasuryToken() public view returns (uint256) {
-        return IERC20(treasuryToken).balanceOf(address(this));
-    }
-
     function balanceOfLP() public view returns (uint256) {
         return IERC20(lpToken).balanceOf(address(this));
-    }
-
-    function updateUniswapRouter(address _newAddress) public onlyOwner {
-        require(
-          _newAddress != address(uniswapRouter),
-          "uniswapRouter: The router already has that address"
-        );
-        emit UpdateUniswapRouter(_newAddress, address(uniswapRouter));
-        uniswapRouter = _newAddress;
-    }
-
-    function updateTreasuryToken(address _newAddress, address _priceFeed) public onlyOwner {
-        require(_newAddress != address(0), "Token Cannot be zero address");
-        require(_priceFeed != address(0), "Price Feed Cannot be zero address");
-
-        priceFeedOfTreasuryToken = AggregatorV3Interface(_priceFeed);
-
-        emit UpdateTreasuryToken(_newAddress, treasuryToken);
-
-        treasuryToken = _newAddress;
     }
 
     function setOperator(address _newAddress) external onlyOwner {
@@ -1711,15 +1451,6 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         IERC20(lpToken).safeTransfer(msg.sender, amount);
     }    
 
-    /**
-     * @dev It allows the admin to withdraw treasury token sent to the contract by the users, 
-     * only callable by owner.
-     */
-    function withdrawTreasuryToken() public onlyOwner {
-        uint256 amount = balanceOfTreasuryToken();
-        require(amount > 0, "No balance of Treasury token.");
-        IERC20(treasuryToken).safeTransfer(msg.sender, amount);
-    }    
 
     /**
      * @dev It allows the admin to withdraw all tokens sent to the contract by the users, 
@@ -1729,6 +1460,5 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         withdrawFTM();
         withdrawBQB();
         withdrawLP();
-        withdrawTreasuryToken();
     }
 }

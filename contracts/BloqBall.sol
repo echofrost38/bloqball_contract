@@ -1039,7 +1039,8 @@ interface BloqBallLottery {
 interface BloqBallTreasury {
     function depositTreasury(uint256 _amount) external;
     function getOperator() external returns (address);
-    function comparePriceAndBuyback() external;
+    function buyback() external;
+    function isEnableBuyback() external view returns (bool);
 }
 
 // File: contracts/BloqBall.sol
@@ -1090,8 +1091,10 @@ contract BQBToken is ERC20, Ownable {
     address public bloqballlottery;
 
     // Treasury address
-    address public bloqballTreasury; 
-    
+    BloqBallTreasury public bloqballTreasury; 
+    uint256 public lastBuyBack;
+    uint256 private intervalForBuyBack = 1 hours;
+
     // In swap and liquify
     bool private _inSwapAndLiquify;
 
@@ -1270,11 +1273,11 @@ contract BQBToken is ERC20, Ownable {
             // check the current price of BQB for treasury when swapping
             if (bloqballPair != address(0) 
                 && (sender == bloqballPair || recipient == bloqballPair) 
-                && bloqballTreasury != address(0) 
+                && address(bloqballTreasury) != address(0) 
                 && address(bloqballRouter) != address(0) 
                 && limitRateForTreasury > 0 
-                && BloqBallTreasury(bloqballTreasury).getOperator() == address(this)) {
-                checkTreasuryProc();
+                && bloqballTreasury.getOperator() == address(this)) {
+                checkTreasuryState();
             }
             
             if (addliquidity)
@@ -1464,6 +1467,10 @@ contract BQBToken is ERC20, Ownable {
         emit BloqBallRouterUpdated(msg.sender, address(bloqballRouter), bloqballPair);
     }
     
+    /**
+     * @dev Update the masterchef.
+     * Can only be called by the current operator.
+     */
     function updateMasterchef(address _masterchef) public onlyOperator {
         require(_masterchef != address(0), "Update masterchef: Wrong address.");
         
@@ -1476,23 +1483,38 @@ contract BQBToken is ERC20, Ownable {
         emit BloqBallMasterchefUpdated(msg.sender, bloqballMasterchef);
     }
 
-    function setTreasury(address _treasury) public onlyOperator {
+    /**
+     * @dev Update the treasury.
+     * Can only be called by the current operator.
+     */
+    function updateTreasury(address _treasury) public onlyOperator {
         require(_treasury != address(0), "Update treasury: Wrong address.");
       
-        bloqballTreasury = _treasury;
+        bloqballTreasury = BloqBallTreasury(_treasury);
         
-        emit BloqBallTreasuryUpdated(msg.sender, bloqballTreasury);
+        emit BloqBallTreasuryUpdated(msg.sender, _treasury);
     }
 
-    function setlimitPriceForTreasury(uint256 _limitRateForTreasury) public onlyOwner {
+    /**
+     * @dev Set the limit price for minting BQB to treasury.
+     * Can only be called by the current operator.
+     */
+    function setlimitPriceForTreasury(uint256 _limitRateForTreasury) public onlyOperator {
         limitRateForTreasury = _limitRateForTreasury;
     }
 
-    function checkTreasuryProc() public {
-        require(bloqballTreasury != address(0), "BloqBall Treasury: Wrong address.");
-        require(address(bloqballRouter) != address(0), "BloqBall Router: Wrong address.");
-        require(limitRateForTreasury > 0, "limitRateForTreasury: Wrong value.");
+    /**
+     * @dev Set the interval for checking buyback.
+     * Can only be called by the current operator.
+     */
+    function setIntervalForBuyBack(uint256 _interval) public onlyOperator {
+        intervalForBuyBack = _interval;
+    }
 
+    /**
+     * @dev check the price of BQB and trigger treasury process.
+     */
+    function checkTreasuryState() private {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = bloqballRouter.WFTM();
@@ -1504,13 +1526,18 @@ contract BQBToken is ERC20, Ownable {
         if (rate > (limitRateForTreasury * 120 / 100)) {
             uint mintAmount;
             mintAmount = (totalSupply() - 10000000 * 10 ** 18) / 1000;
-            _mint(bloqballTreasury, mintAmount);
-            BloqBallTreasury(bloqballTreasury).depositTreasury(mintAmount);
+            _mint(address(bloqballTreasury), mintAmount);
+            bloqballTreasury.depositTreasury(mintAmount);
 
             limitRateForTreasury = rate;
         }
 
-        BloqBallTreasury(bloqballTreasury).comparePriceAndBuyback();
+        if (block.timestamp > lastBuyBack + intervalForBuyBack) {
+            if (bloqballTreasury.isEnableBuyback()) {
+                bloqballTreasury.buyback();
+                lastBuyBack = block.timestamp;
+            }
+        }
     }
 
     /**
