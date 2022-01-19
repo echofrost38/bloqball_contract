@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
-
+pragma experimental ABIEncoderV2;
 // File @openzeppelin/contracts/utils/Context.sol@v3.4.1
 
 /*
@@ -930,6 +930,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         uint256 sellAmount;                 // count of sell-token
         uint256 buyAmount;                  // count of buy-token
         uint256 lockupPeriod;               // lockup period
+        uint256 discountRate;               // discount percent
     }
 
     mapping (address=> mapping(uint=>PurchasedInfo[])) public purchasedInfo;
@@ -1022,11 +1023,11 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         amount[0] = _amount.mul(allocPoints[0]).div(10000);
         amount[1] = _amount.mul(allocPoints[1]).div(10000);
 
-        poolInfo[0].totalDepositBQB = amount[0];
-        poolInfo[0].remainedBQB = amount[0];
+        poolInfo[0].totalDepositBQB = poolInfo[0].totalDepositBQB.add(amount[0]);
+        poolInfo[0].remainedBQB = poolInfo[0].remainedBQB.add(amount[0]);
 
-        poolInfo[1].totalDepositBQB = amount[1];
-        poolInfo[1].remainedBQB = amount[1];
+        poolInfo[1].totalDepositBQB = poolInfo[1].totalDepositBQB.add(amount[1]);
+        poolInfo[1].remainedBQB = poolInfo[1].remainedBQB.add(amount[1]);
 
         // emit an event when tokens are deposited
         emit depositBQB(amount[0], amount[1]);
@@ -1055,7 +1056,8 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
             pid: 0,
             sellAmount: msg.value,
             buyAmount: tokenAmount,
-            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400))
+            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400)),
+            discountRate: _discountRate
         }));
 
         // emit an event when tokens are purchased
@@ -1083,13 +1085,20 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
             pid: 1,
             sellAmount: _amount,
             buyAmount: tokenAmount,
-            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400))
+            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400)),
+            discountRate: _discountRate
         }));
 
         IERC20(poolInfo[1].token).safeTransferFrom(msg.sender, address(this), _amount);
 
         // emit an event when tokens are purchased
         emit TokensPurchased(msg.sender, bloqball, tokenAmount, rate);
+    }
+
+    // View function to see user's purchased info.
+    function getPurchasedInfo(uint256 _pid, address _user) 
+        public view returns (PurchasedInfo[] memory) {
+        return purchasedInfo[_user][_pid];
     }
 
     // View function to see pending BQBs on frontend.
@@ -1190,16 +1199,6 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         return amountBQB.mul(decimal).div(IERC20(lpToken).totalSupply()); 
     }
 
-    function calculateRateBQB2LP() public view returns (uint256){
-        (uint256 amountBQB, uint256 amountFTM) = 
-                IBloqBallRouter01(bloqballRouter).getReservesOfLiquidity(bloqball, WFTM);
-
-        uint256 rate = calculateRateFTM2BQB();
-        amountBQB = amountBQB.add(amountFTM.mul(rate).div(decimal));
-
-        return IERC20(lpToken).totalSupply().mul(decimal).div(amountBQB); 
-    }
-
     function calculatePriceOfLP() public view returns (uint256){
         uint256 amountBQB = calculateRateLP2BQB();
 
@@ -1298,8 +1297,10 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         require(_amountofLP <= balanceOfLP(), "Insufficient value");
 
         uint256 oldBalance = IERC20(bloqball).balanceOf(address(this));
+        uint256 oldBalanceOfFTM = address(this).balance;
 
         IERC20(lpToken).approve(bloqballRouter, _amountofLP);
+
         IBloqBallRouter02(bloqballRouter).removeLiquidityFTMSupportingFeeOnTransferTokens(
           bloqball,
           _amountofLP,
@@ -1310,11 +1311,15 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         );
 
         uint256 newBalance = IERC20(bloqball).balanceOf(address(this));
+        uint256 newBalanceOfFTM = address(this).balance;
+
         uint256 difference = newBalance.sub(oldBalance);
+        uint256 differenceOfFTM = newBalanceOfFTM.sub(oldBalanceOfFTM);
 
         poolInfo[1].totalDepositBQB = poolInfo[1].totalDepositBQB.add(difference);
         poolInfo[1].remainedBQB = poolInfo[1].remainedBQB.add(difference);
-        poolInfo[0].totalFund = poolInfo[1].totalFund.sub(_amountofLP);
+        poolInfo[1].totalFund = poolInfo[1].totalFund.sub(_amountofLP);
+        poolInfo[0].totalFund = poolInfo[1].totalFund.add(differenceOfFTM);
 
         emit buyBack(lpToken, _amountofLP, newBalance.sub(oldBalance));
     }
@@ -1345,35 +1350,6 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
         // emit an event when tokens are purchased
         emit TokensPurchased(msg.sender, WFTM, tokenAmount, rate);
-    }
-
-    function buybackBQBforLPbyUser(uint256 _amountofBQB) public {
-        bool enableBuyBack = isEnableBuyback();
-        require(enableBuyBack, "BuyBack is not available.");
-
-        uint rate = calculateRateBQB2LP();
-        uint tokenAmount = _amountofBQB.mul(rate).div(decimal);
-        tokenAmount = tokenAmount.add(tokenAmount.mul(discountRate).div(uint(10000)));
-
-        require(balanceOfLP() >= tokenAmount, "Available FTM/BQB not sufficient to complete buying");
-
-        IERC20(lpToken).safeTransfer(msg.sender, tokenAmount);
-
-        uint256 oldBalance = IERC20(bloqball).balanceOf(msg.sender);
-        IERC20(bloqball).safeTransferFrom(msg.sender, address(this), _amountofBQB);
-
-        uint256 newBalance = IERC20(bloqball).balanceOf(msg.sender);
-        uint256 difference = oldBalance.sub(newBalance);
-
-        userInfo[msg.sender][1].totalSelledBQB = userInfo[msg.sender][1].totalSelledBQB.add(_amountofBQB);
-        userInfo[msg.sender][1].totalEarnedToken = userInfo[msg.sender][1].totalEarnedToken.add(tokenAmount);
-
-        poolInfo[1].totalDepositBQB = poolInfo[1].totalDepositBQB.add(difference);
-        poolInfo[1].remainedBQB = poolInfo[1].remainedBQB.add(difference);
-        poolInfo[1].totalFund = poolInfo[1].totalFund.sub(tokenAmount);
-
-        // emit an event when tokens are purchased
-        emit TokensPurchased(msg.sender, lpToken, tokenAmount, rate);
     }
 
     function setDiscountRateforBuyBackBQB(uint256 _rate) public onlyOwner {
@@ -1429,6 +1405,8 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     function withdrawFTM() public onlyOwner {
         require(address(this).balance > 0, "No balance of ETH.");
         require(payable(msg.sender).send(address(this).balance));
+
+        poolInfo[0].totalFund = 0;
     } 
 
     /**
@@ -1439,6 +1417,9 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         uint256 amount = balanceOfBQB();
         require(amount > 0, "No balance of BQB.");
         IERC20(bloqball).safeTransfer(msg.sender, amount);
+
+        poolInfo[0].remainedBQB = 0;
+        poolInfo[1].remainedBQB = 0;
     }      
 
     /**
@@ -1449,6 +1430,8 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         uint256 amount = balanceOfLP();
         require(amount > 0, "No balance of LP.");
         IERC20(lpToken).safeTransfer(msg.sender, amount);
+
+        poolInfo[1].totalFund = 0;
     }    
 
 

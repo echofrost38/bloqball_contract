@@ -574,10 +574,6 @@ interface RandomNumberGenerator {
     function setKeyHash(bytes32 _keyHash) external;
 }
 
-interface PriceConsumerV3 {
-    function getLatestPrice() external returns (int);
-}
-
 // File: contracts/JackpotLottery.sol
 
 /** @title Jackpot Lottery.
@@ -591,7 +587,6 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
     bool    private enableChainlinkRandomGenerator = false;
     
     BQBToken public bqbToken;
-    PriceConsumerV3 public priceConsumer;
     
     uint256 private constant MAX_PRIZERESERVE = 500000 * 10 ** 18;                      // 500k BQB
     uint256 private prizeReserve = 500000 * 10 ** 18;                                   // 500k BQB
@@ -688,8 +683,8 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
     }
     
     function drawRewards(uint256 _amount) private {
-
-        uint256 reward = calculateBQBFromBracket(getBracketOfMatchingFromTicketNumber(ticketNumber));
+        uint256 bracket = getBracketOfMatchingFromTicketNumber(ticketNumber);
+        uint256 reward = calculateBQBFromBracket(bracket);
         
         if (_amount * (10 ** 18) >= amountForEligibility)
         {

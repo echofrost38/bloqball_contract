@@ -686,14 +686,12 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
     BQBToken public bqbToken;
     IRandomNumberGenerator public randomGenerator;
     
-    uint256 public constant MAX_PRIZERESERVE = 50000 * 10 ** 18;                        // 50k BQB
-    uint256 public constant MAX_PENDINGINJECTIONNEXTLOTTERY = 50000 * 10 ** 18;         // 50k BQB
+    uint256 private minPendingInjectionNextLottery = 50000 * 10 ** 18;                  // 50k BQB
+    uint256 private minPrizeReserve = 75000 * 10 ** 18;                                 // 75k BQB
     
-    uint256 private minPendingInjectionNextLottery = 25000 * 10 ** 18;                  // 25k BQB
-    uint256 private minPrizeReserve = 15000 * 10 ** 18;                                 // 15k BQB
-    
-    uint256 private minPendingInjectionNextLotteryForWeeklyLottery = 50000 * 10 ** 18;  // 50k BQB
-    uint256 private minPrizeReserveForWeeklyLottery = 30000 * 10 ** 18;                 // 30k BQB
+    uint256 private minPendingInjectionNextLotteryForWeeklyLottery = 100000 * 10 ** 18; // 100k BQB
+    uint256 private minPrizeReserveForWeeklyLottery = 150000 * 10 ** 18;                // 150k BQB
+
     uint256 private maxRewardPerClaim = 50000 * 10 ** 18;                               // 50k BQB
     uint256 private MAX_CLIMABLE_PEROID = 1 weeks;
 
@@ -1378,8 +1376,8 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
       
         currentLotteryId++;
         
-        // daily lottery : minPendingInjectionNextLottery = 25000 * 10 ** 18 (25K BQB), minPrizeReserve = 15000  * 10 ** 18 (15K BQB)
-        // Weekly bumper lottery : minPendingInjectionNextLotteryForWeeklyLottery = 50000 * 10 ** 18 (50K BQB), minPrizeReserveForWeeklyLottery = 30000  * 10 ** 18 (30K BQB)
+        // daily lottery : minPendingInjectionNextLottery = 50000 * 10 ** 18 (50K BQB), minPrizeReserve = 15000  * 10 ** 18 (15K BQB)
+        // Weekly bumper lottery : minPendingInjectionNextLotteryForWeeklyLottery = 100000 * 10 ** 18 (100K BQB), minPrizeReserveForWeeklyLottery = 30000  * 10 ** 18 (30K BQB)
         if (!weeklyLottery)     // daily lottery
         {
             if (pendingInjectionNextLottery < minPendingInjectionNextLottery)
@@ -1458,9 +1456,6 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
         external
         onlyOwner
     {
-        require(_minPendingInjectionNextLottery <= MAX_PENDINGINJECTIONNEXTLOTTERY, "Pending Injection Next Lottery too high");
-        require(_minPrizeReserve <= MAX_PRIZERESERVE, "Prize Reserve too high");
-        
         minPendingInjectionNextLottery = _minPendingInjectionNextLottery;
         minPrizeReserve = _minPrizeReserve;
     }
@@ -1476,9 +1471,6 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallSwapLottery, Ownable {
         external
         onlyOwner
     {
-        require(_minPendingInjectionNextLottery <= MAX_PENDINGINJECTIONNEXTLOTTERY, "Pending Injection Next Lottery too high");
-        require(_minPrizeReserve <= MAX_PRIZERESERVE, "Prize Reserve too high");
-    
         minPendingInjectionNextLotteryForWeeklyLottery = _minPendingInjectionNextLottery;
         minPrizeReserveForWeeklyLottery = _minPrizeReserve;
     }

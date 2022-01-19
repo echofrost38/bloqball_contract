@@ -1306,7 +1306,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         return block.timestamp >= user.nextHarvestFTMUntil;
     }
 
-    // View function to see user's deposit list.
+    // View function to see user's deposit info.
     function getDepositInfo(uint256 _pid, address _user) public view returns (DepositInfo[] memory) {
         return depositInfo[_user][_pid];
     }
@@ -1506,7 +1506,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         uint256 totalRewards;
         uint256 rewardRate;
         uint256 rewardDebt;
-        uint256 totalRrewardDebt;
+        uint256 totalRewardDebt;
 
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
@@ -1517,19 +1517,17 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
 
         for(uint i=0; i< myDeposits.length; i++) {
-            if (myDeposits[i].nextWithdraw < block.timestamp) {
-                rewardRate = calculateRewardRate(_pid, _user, i);               
-                rewardDebt = (myDeposits[i].amount).mul(myDeposits[i].accBloqBallPerShare).div(1e12);
-                totalRrewardDebt = totalRrewardDebt.add(rewardDebt);
-                totalRewards = (myDeposits[i].amount).mul(accPerShare).div(1e12);
-                totalRewards = totalRewards.sub(rewardDebt);            
+            rewardRate = calculateRewardRate(_pid, _user, i);               
+            rewardDebt = (myDeposits[i].amount).mul(myDeposits[i].accBloqBallPerShare).div(1e12);
+            totalRewardDebt = totalRewardDebt.add(rewardDebt);
+            totalRewards = (myDeposits[i].amount).mul(accPerShare).div(1e12);
+            totalRewards = totalRewards.sub(rewardDebt);            
 
-                rewardAmount = rewardAmount.add(totalRewards.mul(rewardRate).div(10000));
-                taxAmount = taxAmount.add(totalRewards.sub(totalRewards.mul(rewardRate).div(10000)));
-            }
+            rewardAmount = rewardAmount.add(totalRewards.mul(rewardRate).div(10000));
+            taxAmount = taxAmount.add(totalRewards.sub(totalRewards.mul(rewardRate).div(10000)));
         }
 
-        totalRewardAmount = user.amount.mul(accPerShare).div(1e12).sub(totalRrewardDebt);
+        totalRewardAmount = user.amount.mul(accPerShare).div(1e12).sub(totalRewardDebt);
     }
 
     function updateDepositInfo(uint _pid, address _user) private {
