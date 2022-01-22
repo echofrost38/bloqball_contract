@@ -526,32 +526,37 @@ interface IERC721 is IERC165 {
  */
 contract JackpotLottery is ReentrancyGuard, Ownable {
 
+    enum Status {
+        Open,
+        Purchased,
+        Claimed
+    }
+
     struct Reward {
         address nftAddress;
         uint256 tokenId;
         uint256 lastClaimableTime;
-        address owner;
-        bool rewarded;
-        bool claimed;
-        uint256 index;
+        address buyer;
+        Status status;
+        int purchasedIndex;
     }
 
     struct PurchasedInfo {
         address owner;
         uint8 number;
-        Reward reward;
-        bool active;
+        uint256 rewardIndex;
     }
     
-    mapping(address=> mapping(uint8 => Reward)) public userInfo;
+    mapping(address=> mapping(uint8 => uint256)) public userInfo;
     mapping(uint8 => Reward[]) public nftinfo;
     mapping(uint8 => address) public nftAddress;
 
-    PurchasedInfo[] purchasedInfo;
+    PurchasedInfo[] public purchasedInfo;
 
     uint256 public cost = 5 ether;
-    uint256 public totalNFTCount;
-    uint256 public maxClaimableLimitTime = 5 minutes;
+    uint256 public maxClaimableLimitTime = 10 minutes;
+    uint256 public constant MAX_REARRANGE_REWARDS_PEROID = 1 days;
+    uint256 public lastRearrangeTime;
 
     modifier notContract() {
         require(!_isContract(msg.sender), "Contract not allowed");
@@ -559,7 +564,12 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
         _;
     }
     
-    event NewRandomGenerator(address indexed randomGenerator);
+    event SetNFTAddress(uint8 _number, address _nftAddress);
+    event AddNFT(uint8 _number, address _nftAddress, uint256 _tokenId);
+    event BuyTicket(uint8 _number, address buyer, uint256 price);
+    event ClaimNFT(uint8 _number, address _nftAddress, uint256 _tokenId, address newOwner);
+    event UpdateNFT(uint8 _number);
+    event RemoveClaimedRewardInfo(uint8 _number);
     
     constructor() {
     }
@@ -576,6 +586,8 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
         require(_isContract(_nftAddress), "The NFT Address should be a contract");
 
         nftAddress[_number] = _nftAddress;
+
+        emit SetNFTAddress(_number, _nftAddress);
     }
 
     function addNFT(uint8 _number, address _nftAddress, uint256 _tokenId) public {
@@ -588,40 +600,30 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
         address assetOwner = nftRegistry.ownerOf(_tokenId);
         require(assetOwner == msg.sender, "Only the asset owner can add assets");
 
+        nftRegistry.approve(address(this), _tokenId);
         nftRegistry.transferFrom(assetOwner, address(this), _tokenId);
 
         nftinfo[_number].push(Reward({
             nftAddress: _nftAddress,
             tokenId: _tokenId,
             lastClaimableTime: 0,
-            owner: address(0),
-            rewarded: false,
-            claimed: false,
-            index: nftinfo[_number].length
+            buyer: address(this),
+            status: Status.Open,
+            purchasedIndex: -1
         }));
 
-        totalNFTCount ++;
-    }
-
-    function hasNFTforAllRewards() public view returns (bool) {
-        if (totalNFTCount == 0)
-            return false;
-
-        for (uint8 i=1; i<10; i++) {
-            if (nftinfo[i].length == 0)
-                return false;
-        }
-
-        return true;
+        emit AddNFT(_number, _nftAddress, _tokenId);
     }
 
     function hasNFTforRewards(uint8 _number) public view returns (bool) {
         require(_number > 0 && _number < 10, "Wrong number");
-
-        if (totalNFTCount == 0)
-            return false;
+        require(nftAddress[_number] != address(0), "Wrong NFT address");
 
         if (nftinfo[_number].length == 0)
+            return false;
+
+        uint256 index = getPurchableRewardIndex(_number);
+        if (index == nftinfo[_number].length)
             return false;
 
         return true;
@@ -629,9 +631,14 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
 
     function buyTicket(uint8 _number) public payable {
         require(_number > 0 && _number < 10, "Wrong number");
+        require(nftAddress[_number] != address(0), "Wrong NFT address");
         require(msg.value > cost, "Insufficient value");
+        require(userInfo[msg.sender][_number] == 0, "You have already puchased a NFT.");
 
+        updateNFT(_number);
         generateTicketNumber(_number);
+
+        emit BuyTicket(_number, msg.sender, msg.value);
     }
 
     /**
@@ -652,138 +659,47 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
     
     function drawRewards(uint8 _number, uint256 ticketNumber) public {
         (bool bEqualAll, uint8 equalNumber) = getBracketOfMatchingFromTicketNumber(ticketNumber);
+
         if (bEqualAll) {
             require(nftinfo[equalNumber].length > 0, "No more NFTs available to Win");
 
-            Reward memory reward = nftinfo[equalNumber][0];
+            uint256 index = getPurchableRewardIndex(equalNumber);
+            require(index < nftinfo[equalNumber].length, "No purchable reward");
 
-            require(reward.owner == address(0) 
-                    && reward.rewarded == false
-                    && reward.claimed == false, 
+            Reward memory reward = nftinfo[equalNumber][index];
+
+            require(reward.buyer == address(this) 
+                    && reward.status == Status.Open, 
                     "The NFT was already reserved for another user");
 
             reward.lastClaimableTime = block.timestamp + maxClaimableLimitTime;
-            reward.owner = msg.sender;
-            reward.rewarded = true;
+            reward.buyer = msg.sender;
+            reward.status = Status.Purchased;
+            reward.purchasedIndex = int(purchasedInfo.length);
 
-            userInfo[msg.sender][_number] = reward;
+            nftinfo[equalNumber][index] = reward;
 
             purchasedInfo.push(PurchasedInfo({
                 owner: msg.sender,
                 number: _number,
-                reward: reward,
-                active: true
+                rewardIndex: index
             }));
 
-            totalNFTCount--;
+            userInfo[msg.sender][_number] = purchasedInfo.length;
         }
     }
 
-    function cancelRewards(address owner, uint8 _number) public {
-        require(_number > 0 && _number < 10, "Wrong number");
-
-        Reward memory reward = userInfo[owner][_number];
-
-        nftinfo[_number][reward.index].rewarded = false;
-
-        totalNFTCount++;
-
-        // remove reward info
-        delete userInfo[owner][_number];
-    }
-
-
-    function claimNFT(uint8 _number) external notContract nonReentrant
-    {
-        require(_number > 0 && _number < 10, "Wrong number");
-
-        updateNFT(_number);
-
-        Reward memory reward = userInfo[msg.sender][_number];
-
-        require(reward.owner == msg.sender, "Unauthorized sender");
-        require(reward.rewarded == true && reward.claimed == false, "Wrong claimed");
-
-        address _nftAddress = reward.nftAddress;
-        uint _tokenId = reward.tokenId;
-
-        // Transfer NFT asset
-        IERC721(_nftAddress).transferFrom(
-            address(this),
-            msg.sender,
-            _tokenId
-        );
-
-        reward.claimed = true;
-
-        // remove reward info
-        delete userInfo[msg.sender][_number];
-    }
-
-    function updateNFT(uint8 _number) public {
-        uint length = purchasedInfo.length;
-        for (uint i=0; i<length; i++) {
-            if (purchasedInfo[i].reward.lastClaimableTime < block.timestamp) {
-                cancelRewards(purchasedInfo[i].reward.owner, _number);
-                purchasedInfo[i].active = false;
-            }
+    function getPurchableRewardIndex(uint8 _number) public view returns (uint256) {
+        uint256 length = nftinfo[_number].length;
+        uint256 i = 0;
+        for (i=0; i<length; i++) {
+            if (nftinfo[_number][i].status == Status.Open)
+                return i;
         }
-        removeInactivePurchaseInfo();
-        removePurchasedReward(_number);
+
+        return i;
     }
 
-    function removeInactivePurchaseInfo() public {
-        for (uint i=0; i<purchasedInfo.length; i++) {
-            while(purchasedInfo.length > 0 && purchasedInfo[i].active  == false) {
-                for (uint j = i; j<purchasedInfo.length-1; j++) {
-                    purchasedInfo[j] = purchasedInfo[j+1];
-                }
-                purchasedInfo.pop();
-            }
-        }
-    }
-
-    function removePurchasedReward(uint8 _number) public {
-        require(_number > 0 && _number < 10, "Wrong number");
-
-        for (uint i=0; i<nftinfo[_number].length; i++) {
-            while(nftinfo[_number].length > 0 && nftinfo[_number][i].claimed == true) {
-                for (uint j = i; j<nftinfo[_number].length-1; j++) {
-                    nftinfo[_number][j] = nftinfo[_number][j+1];
-
-                    if (userInfo[nftinfo[_number][j].owner][_number].rewarded)
-                        userInfo[nftinfo[_number][j].owner][_number].index = 
-                            userInfo[nftinfo[_number][j].owner][_number].index - 1;
-                }
-                nftinfo[_number].pop();
-            }
-        }
-    }
-
-    function setMaxClaimableLimitTime (uint256 _limitTime) public onlyOwner {
-        maxClaimableLimitTime = _limitTime;
-    }
-
-    function getNFTInfo(uint8 _number) public view returns (Reward[] memory) {
-        require(_number > 0 && _number < 10, "Wrong number");
-
-        return nftinfo[_number];
-    }
-
-    /**
-     * @notice Get the information of the user.
-     */
-    function getUserInfo(address _account, uint8 _number) public view returns (Reward memory){
-        return userInfo[_account][_number];
-    }
-
-    /**
-     * @notice Get the purchased information of the user.
-     */
-    function getPurchaedInfo() public view returns (PurchasedInfo[] memory){
-        return purchasedInfo;
-    }
-    
     /**
      * @notice Calculate the bracket of the ticket number.
      */
@@ -813,6 +729,120 @@ contract JackpotLottery is ReentrancyGuard, Ownable {
 
         if (bEqualAll)
             equalNumber = uint8(number);
+    }
+
+    function claimNFT(uint8 _number) external notContract nonReentrant
+    {
+        require(_number > 0 && _number < 10, "Wrong number");
+
+        updateNFT(_number);
+
+        uint256 purchasedIndex = userInfo[msg.sender][_number];
+        require(purchasedIndex > 0, "No purchased reward");
+
+        uint256 rewardIndex = purchasedInfo[purchasedIndex-1].rewardIndex;
+
+        Reward memory reward = nftinfo[_number][rewardIndex];
+
+        require(reward.buyer == msg.sender, "Unauthorized sender");
+        require(reward.status == Status.Purchased, "Wrong purchased");
+
+        // Transfer NFT asset
+        IERC721(reward.nftAddress).transferFrom(
+            address(this),
+            msg.sender,
+            reward.tokenId
+        );
+
+        nftinfo[_number][rewardIndex].status = Status.Claimed;
+
+        removePuchasedInfo(purchasedIndex-1);
+        delete userInfo[msg.sender][_number];
+
+        emit ClaimNFT(_number, reward.nftAddress, reward.tokenId, msg.sender);
+    }
+
+    function updateNFT(uint8 _number) public {
+        uint length = purchasedInfo.length;
+        uint256 rewardIndex;
+
+        for (uint i=0; i<length; i++) {
+            rewardIndex = purchasedInfo[i].rewardIndex;
+            Reward memory reward = nftinfo[_number][rewardIndex];
+
+            if (reward.lastClaimableTime < block.timestamp 
+                    && reward.status == Status.Purchased
+                    && reward.buyer != address(this)) {
+                reward.buyer = address(this);
+                reward.status = Status.Open;
+
+                nftinfo[_number][rewardIndex] = reward;
+            }
+        }
+
+        if (block.timestamp > lastRearrangeTime) {
+            removeClaimedRewardInfo(_number);
+            lastRearrangeTime = block.timestamp + MAX_REARRANGE_REWARDS_PEROID;
+        }
+
+        emit UpdateNFT(_number);
+    }
+
+    function removePuchasedInfo(uint256 index) public {
+        if (index >= purchasedInfo.length)
+            return;
+
+        for (uint256 i = index; i<purchasedInfo.length-1; i++){
+            purchasedInfo[i] = purchasedInfo[i+1];
+            uint8 number = purchasedInfo[i].number;
+            address owner = purchasedInfo[i].owner;
+            userInfo[owner][number] = userInfo[owner][number] - 1; 
+        }
+
+        purchasedInfo.pop();
+    }
+
+    function removeClaimedRewardInfo(uint8 _number) public {
+        require(_number > 0 && _number < 10, "Wrong number");
+
+        for (uint i=0; i<nftinfo[_number].length; i++) {
+            while(nftinfo[_number].length > 0 && nftinfo[_number][i].status == Status.Claimed) {
+                for (uint j = i; j<nftinfo[_number].length-1; j++) {
+                    nftinfo[_number][j] = nftinfo[_number][j+1];
+
+                    int purchasedIndex = nftinfo[_number][j].purchasedIndex;
+                    if (purchasedIndex >= 0)
+                        purchasedInfo[i].rewardIndex = purchasedInfo[i].rewardIndex - 1;
+                }
+                nftinfo[_number].pop();
+            }
+        }
+
+        emit RemoveClaimedRewardInfo(_number);
+    }
+
+    function setMaxClaimableLimitTime (uint256 _limitTime) public onlyOwner {
+        maxClaimableLimitTime = _limitTime;
+    }
+
+    function getNFTInfo(uint8 _number) public view returns (Reward[] memory) {
+        require(_number > 0 && _number < 10, "Wrong number");
+
+        return nftinfo[_number];
+    }
+
+    /**
+     * @notice Get the information of the user.
+     */
+    function getUserInfo(address _account, uint8 _number) public view returns (uint256){
+        return userInfo[_account][_number];
+    }
+
+    /**
+     * @notice Get the purchased information of the user.
+     */
+    function getPurchaedInfo() public view returns (PurchasedInfo[] memory){
+        return purchasedInfo;
     }
 
     function _requireERC721(address _nftAddress) internal view returns (IERC721) {
