@@ -1,0 +1,5 @@
+truffle compile
+
+truffle deploy --network bscTest
+
+truffle run verify HarmonyPenguins@0x2E1A1f5E5164DF21051d1B67741FfAA3D65Aa09c --network bscTest

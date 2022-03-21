@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@truffle/hdwallet-provider": "^1.7.0",
+    "arb-ethers-web3-bridge": "^0.7.3",
+    "fs": "^0.0.1-security",
+    "truffle-plugin-verify": "^0.5.18"
+  }
+}
