@@ -177,10 +177,10 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Transfers operator of the contract to a new account (`newOperator`).
+     * @dev Set operator of the contract to a new account (`newOperator`).
      * Can only be called by the current operator.
      */
-    function transferOperator(address newOperator) public onlyOwner {
+    function setOperator(address newOperator) public onlyOwner {
         require(newOperator != address(0), "BloqBall::transferOperator: new operator is the zero address");
         emit OperatorTransferred(_operator, newOperator);
 
