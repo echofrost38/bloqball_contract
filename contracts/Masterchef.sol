@@ -69,9 +69,6 @@ contract MasterChef is Ownable, ReentrancyGuard {
     
     // The BQB TOKEN!
     address public bloqball;
-    
-    // The count of BQB transfered from transaction fees.
-    uint256 private totalAmountFromFee = 0;
 
     // The count of BQB transfered from reward fees.
     uint256 private totalAmountFromFeeByRewards = 0;
@@ -81,14 +78,15 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     // BQB tokens created per block.
     uint256 public BQBPerBlock = 1 * 10**18;
-    uint256 public initialBQBPerBlock = 10 * 10 ** 18;        // 10 BQB until first 10 days
+    uint256 public initialBQBPerBlock = 10 * 10 ** 18;          // 10 BQB until first 10 days
 
     // Bonus muliplier for early BQB makers.
     uint256 public constant BONUS_MULTIPLIER = 1;
 
     // First day and default harvest interval
     uint256 public constant DEFAULT_HARVEST_INTERVAL = 1 minutes;
-    uint256 public constant MAX_HARVEST_INTERVAL = 1 days;
+    uint256 public constant MAX_HARVEST_INTERVAL = 20 minutes;  //1 days;
+    uint256 public lockUpTaxRate = 50;                          // 50%
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -111,19 +109,16 @@ contract MasterChef is Ownable, ReentrancyGuard {
     // The block number and timestamp when BQB mining starts.
     bool public enableStartBQBReward = false;
     uint256 public startBlock;
-    uint256 public startStakingTime;
 
     mapping(uint8 => bool) public enableStaking;
 
     // Informations to get daily FTM reward for calculating APR of FTM rewards in staking BQB
-    struct FTmRewardInfo {
+    struct FTMRewardInfo {
         uint256 timestamp;
         uint256 totalAmountFromFee;
     }
-    mapping(uint256 => FTmRewardInfo) public ftmRewardInfoAtId;
+    mapping(uint256 => FTMRewardInfo) public ftmRewardInfoAtId;
     uint public currentFTMRewardID;
-    
-    uint256 public limitDaysOfRewardTax = 50;
     
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -167,7 +162,6 @@ contract MasterChef is Ownable, ReentrancyGuard {
         enableStartBQBReward = true;
         
         startBlock = block.number;
-        startStakingTime = block.timestamp;
         uint256 length = poolInfo.length;
         
         for (uint256 pid = 0; pid < length; ++pid) {
@@ -446,14 +440,16 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
 
         for(uint256 i=0; i< myDeposits.length; i++) {
-            rewardRate = calculateRewardRate(_pid, _user, i);               
+                      
             rewardDebt = (myDeposits[i].amount).mul(myDeposits[i].accBloqBallPerShare).div(1e12);
             totalRewardDebt = totalRewardDebt.add(rewardDebt);
-            totalRewards = (myDeposits[i].amount).mul(accPerShare).div(1e12);
-            totalRewards = totalRewards.sub(rewardDebt);            
 
-            rewardAmount = rewardAmount.add(totalRewards.mul(rewardRate).div(10000));
-            taxAmount = taxAmount.add(totalRewards.sub(totalRewards.mul(rewardRate).div(10000)));
+            totalRewards = (myDeposits[i].amount).mul(accPerShare).div(1e12);
+            totalRewards = totalRewards.sub(rewardDebt);          
+
+            rewardRate = calculateRewardRate(_pid, _user, i);     
+            taxAmount = taxAmount.add(totalRewards.mul(rewardRate).div(10000));
+            rewardAmount = rewardAmount.add(totalRewards.sub(totalRewards.mul(rewardRate).div(10000)));
         }
 
         totalRewardAmount = user.amount.mul(accPerShare).div(1e12).sub(totalRewardDebt);
@@ -475,21 +471,16 @@ contract MasterChef is Ownable, ReentrancyGuard {
         DepositInfo storage myDeposit =  depositInfo[_user][_pid][_depositIndex];
 
         if (myDeposit.nextWithdraw > block.timestamp) {
-            return 0;
+            return lockUpTaxRate;
         }
         
         uint256 elapsedTime = block.timestamp.sub(myDeposit.nextWithdraw);
-        
-        if (elapsedTime > limitDaysOfRewardTax.mul(MAX_HARVEST_INTERVAL)) {
-            rewardRate = 9900;          // 99%
-        }
-        else {
-            uint256 interval = elapsedTime.div(MAX_HARVEST_INTERVAL);
-            rewardRate = (uint256(10000)).sub((limitDaysOfRewardTax.sub(interval)).mul(uint256(100)));
-        }
+
+        uint256 interval = elapsedTime.div(MAX_HARVEST_INTERVAL);
+        rewardRate = lockUpTaxRate.sub((interval.add(1)).mul(100));
     }
 
-    function availableForWithdraw(address _user, uint8 _pid) private view returns (uint256 totalAmount) {
+    function availableForWithdraw(address _user, uint8 _pid) public view returns (uint256 totalAmount) {
         totalAmount = 0;
         DepositInfo[] memory myDeposits =  depositInfo[_user][_pid];
         for(uint256 i=0; i< myDeposits.length; i++) {
@@ -601,7 +592,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
     }
 
-    function getRewardsFTMofPeriod(uint period) external view returns (uint256) {
+    function getRewardsFTMofPeriod(uint256 period) external view returns (uint256) {
         uint oldDay = block.timestamp - period * 1 days;
         uint256 newFTMReward;
         uint256 ftmRewardOfOldDay;
@@ -629,9 +620,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
         feeAddress = _feeAddress;
     }
     
-    function setLimitPeriodOfRewardTax(uint256 _limit) public onlyOwner {
-        require(_limit <= 100, 'Limit Period: can not over 100 days');
-        limitDaysOfRewardTax = _limit;
+    function setLockUpTaxRate(uint256 _limit) public onlyOwner {
+        require(_limit <= 100, 'Limit Period: can not over 100%');
+        lockUpTaxRate = _limit;
     }
 
     function removeAmountFromDeposits(address _user, uint8 _pid, uint256 _amount, uint256 _time) private {

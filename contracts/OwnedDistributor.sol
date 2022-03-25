@@ -14,12 +14,12 @@ contract OwnedDistributor is Ownable{
     
     uint public totalShares;
     
-    uint public vestingAmount = 1100_000 * 10 ** 18;      // Initial vesting amount for users who deposit FTM
+    uint public vestingAmount = 1100_000 * 10 ** 18;      // 1.1M BQB Initial vesting amount for users who deposit FTM
 
     uint public vestingBegin;
     uint public vestingEnd;
     
-    uint public vestingPeriod = 120 days;
+    uint public vestingPeriod = 120 minutes; //120 days;
 
     struct Recipient {
         uint shares;

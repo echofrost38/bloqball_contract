@@ -51,9 +51,9 @@ contract BloqBall is ERC20, Ownable {
     // Burn address
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 public initialSupply = 10_000_000 * (10 ** 18);      // 10M BQB
+    uint256 public initialSupply = 10_000_000 * (10 ** 18);         // 10M BQB
 
-    uint256 public swapAndSendTokensAtAmount = 1_000 * (10**18);
+    uint256 public swapAndSendTokensAtAmount = 1_000 * (10**18);    // 1000 BQB
     
     // Max transfer amount rate in basis points. (default is 0.5% of total supply)
     uint16 public maxTransferAmountRate = 50;
@@ -62,7 +62,7 @@ contract BloqBall is ERC20, Ownable {
     mapping(address => bool) private _excludedFromAntiWhale;
     
     mapping(address => bool) public _bqbHolderInfo;
-    uint256  public totalCountofBQBHolders = 0;
+    uint256  public totalCountofBQBHolders;
 
     mapping(address => bool) public _isBlacklisted;
 
@@ -73,14 +73,11 @@ contract BloqBall is ERC20, Ownable {
     // Automatic swap and liquify enabled
     bool public swapAndLiquifyEnabled = false;
     
-    // Min amount to liquify. (default 500 BQBs)
-    uint256 public minAmountToLiquify = 500 * (10 ** 18); // 500 BQB
-
     // In swap and liquify
     bool private _inSwapAndLiquify;
 
     // Parameters to mint tokens to developer
-    address private _developer = address(0x1c62e6f7dD3BD5ef0999080056c289d600Ee31Ec);
+    address private _developer = address(0x2C4C168A2fE4CaB8E32d1B2A119d4Aa8BdA377e7);
     uint256 private lastMinttoDev;
     uint256 private totalMintedBQBofDev;
     uint256 constant MAXIMUM_TRANSFER_TO_DEVELOPER = 10_000_000 * 10 ** 18;        // 10M BQB for developer
@@ -125,6 +122,12 @@ contract BloqBall is ERC20, Ownable {
 
     modifier onlyOperator() {
         require(_operator == msg.sender, "operator: caller is not the operator");
+        _;
+    }
+
+    modifier onlyOperatorOrDeveloper() {
+        require(_operator == msg.sender || _developer == msg.sender, 
+            "operator: caller is not the operator or developer");
         _;
     }
 
@@ -201,7 +204,8 @@ contract BloqBall is ERC20, Ownable {
         excludeFromFees(_operator, true);
     }
     
-    function mintToDeveloper(uint256 _amount) external onlyOperator {
+    function mintToDeveloper(uint256 _amount) external {
+        require(_developer == msg.sender, "developer: caller is not the operator or developer");
         require(_amount <= MAXIMUM_TRANSFER_TO_DEVELOPER_MONTHLY, "BloqBall::transfer: too much amount monthly");
         require(block.timestamp - lastMinttoDev > 30 days, 'Need to wait 1 month');
         require(totalMintedBQBofDev < MAXIMUM_TRANSFER_TO_DEVELOPER, 'BloqBall::transfer: too much amount');
@@ -522,15 +526,6 @@ contract BloqBall is ERC20, Ownable {
         require(_maxTransferAmountRate <= 10000, "BloqBall::updateMaxTransferAmountRate: Max transfer amount rate must not exceed the maximum rate.");
         emit MaxTransferAmountRateUpdated(msg.sender, maxTransferAmountRate, _maxTransferAmountRate);
         maxTransferAmountRate = _maxTransferAmountRate;
-    }
-
-    /**
-     * @dev Update the min amount to liquify.
-     * Can only be called by the current operator.
-     */
-    function updateMinAmountToLiquify(uint256 _minAmount) public onlyOperator {
-        emit MinAmountToLiquifyUpdated(msg.sender, minAmountToLiquify, _minAmount);
-        minAmountToLiquify = _minAmount;
     }
 
     /**
