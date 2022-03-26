@@ -86,7 +86,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     // First day and default harvest interval
     uint256 public constant DEFAULT_HARVEST_INTERVAL = 1 minutes;
     uint256 public constant MAX_HARVEST_INTERVAL = 15 minutes;  //1 days;
-    uint256 public lockUpTaxRate = 50;                          // 50%
+    uint256 public lockUpTaxRate = 5000;                        // 50%
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -621,7 +621,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
     
     function setLockUpTaxRate(uint256 _limit) public onlyOwner {
-        require(_limit <= 100, 'Limit Period: can not over 100%');
+        require(_limit <= 10000, 'Limit Period: can not over 100%');
         lockUpTaxRate = _limit;
     }
 

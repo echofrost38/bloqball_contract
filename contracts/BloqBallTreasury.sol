@@ -56,7 +56,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         uint256 discountRate;               // discount percent
     }
 
-    mapping (address=> mapping(uint=>PurchasedInfo[])) public purchasedInfo;
+    mapping (address=> mapping(uint256=>PurchasedInfo[])) public purchasedInfo;
 
     // Info of each user.
     struct UserInfo {
@@ -67,7 +67,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         uint256 totalEarnedToken;           // total count of earned FTM by selling BQB
     }
 
-    mapping (address=> mapping(uint=> UserInfo)) public userInfo;
+    mapping (address=> mapping(uint256=> UserInfo)) public userInfo;
 
     modifier onlyOperator() {
         require(msg.sender == operatorAddress, "Not operator");
@@ -77,7 +77,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     event depositBQB(uint256 amount0, uint256 amount1);
     event TokensPurchased(address receiver, address token, uint256 amount, uint256 rate);
     event TokensClaimed(address receiver, uint256 amount);
-    event buyBack(address sellToken, uint sellAmount, uint buyAmount);
+    event buyBack(address sellToken, uint256 sellAmount, uint256 buyAmount);
     event burnBQB(address token, uint256 amount);
     event NewOperatorAddresses(address newAddress);
 
@@ -123,7 +123,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         }));
     }
 
-    function set(uint _pid, IERC20 _token, uint256 _totalDespositBQB, 
+    function set(uint256 _pid, IERC20 _token, uint256 _totalDespositBQB, 
                 uint256 _totalPurchasedBQB, uint256 _remainedBQB) public onlyOwner {
         require(address(_token) != address(this), "token : Wrong address");
         poolInfo[_pid].token = _token;
@@ -193,7 +193,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         uint256 rate = calculateRateLP2BQB();
         uint256 tokenAmount = _amount.mul(rate).div(decimal);
 
-        uint256 _discountRate = _lockupPeriod.mul(uint(100));            // 5 days -> add 5%
+        uint256 _discountRate = _lockupPeriod.mul(uint256(100));            // 5 days -> add 5%
         tokenAmount = tokenAmount.add(tokenAmount.mul(_discountRate).div(10000));
 
         // check if the contract has enough tokens
@@ -227,12 +227,12 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     }
 
     // View function to see pending BQBs on frontend.
-    function pendingBQB(uint256 _pid, address _user) public view returns (uint) {
+    function pendingBQB(uint256 _pid, address _user) public view returns (uint256) {
         uint256 totalClaimable;
 
         PurchasedInfo[] memory myPurchased =  purchasedInfo[_user][_pid];
 
-        for (uint i=0; i< myPurchased.length; i++) {
+        for (uint256 i=0; i< myPurchased.length; i++) {
             if (myPurchased[i].lockupPeriod < block.timestamp) {
                 totalClaimable = totalClaimable.add(myPurchased[i].buyAmount);
             }
@@ -260,10 +260,10 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         emit TokensClaimed(msg.sender, amount);
     }
 
-    function removeAmountFromPurchased(address _user, uint _pid, uint _amount, uint _time) private {
-        uint length =  purchasedInfo[_user][_pid].length;
+    function removeAmountFromPurchased(address _user, uint256 _pid, uint256 _amount, uint256 _time) private {
+        uint256 length =  purchasedInfo[_user][_pid].length;
 
-        for(uint i=0; i< length; i++) {
+        for(uint256 i=0; i< length; i++) {
             if(purchasedInfo[_user][_pid][i].lockupPeriod < _time) {
                 if (purchasedInfo[_user][_pid][i].buyAmount <= _amount) {
                     _amount = _amount.sub(purchasedInfo[_user][_pid][i].buyAmount);
@@ -281,10 +281,10 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         }
     }
 
-    function removeEmptyPurchased(address user, uint _pid) private {
-        for (uint i=0; i<purchasedInfo[user][_pid].length; i++) {
+    function removeEmptyPurchased(address user, uint256 _pid) private {
+        for (uint256 i=0; i<purchasedInfo[user][_pid].length; i++) {
             while(purchasedInfo[user][_pid].length > 0 && purchasedInfo[user][_pid][i].buyAmount  == 0) {
-                for (uint j = i; j<purchasedInfo[user][_pid].length-1; j++) {
+                for (uint256 j = i; j<purchasedInfo[user][_pid].length-1; j++) {
                     purchasedInfo[user][_pid][j] = purchasedInfo[user][_pid][j+1];
                 }
                 purchasedInfo[user][_pid].pop();
@@ -298,7 +298,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         path[1] = bloqball;
 
         uint256 amountIn = 1 * decimal;
-        uint[] memory amounts = IBloqBallRouter01(bloqballRouter).getAmountsOut(amountIn, path);
+        uint256[] memory amounts = IBloqBallRouter01(bloqballRouter).getAmountsOut(amountIn, path);
 
         return amounts[1];
     }
@@ -309,30 +309,28 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         path[1] = WFTM;
 
         uint256 amountIn = 1 * decimal;
-        uint[] memory amounts = IBloqBallRouter01(bloqballRouter).getAmountsOut(amountIn, path);
+        uint256[] memory amounts = IBloqBallRouter01(bloqballRouter).getAmountsOut(amountIn, path);
 
         return amounts[1];
     }
 
     function calculateRateLP2BQB() public view returns (uint256) {
-        (uint256 amountBQB, uint256 amountFTM, ) = 
-                IBloqBallPair(lpToken).getReserves();
+        uint256 priceBQB = calculatePriceOfBQB();
+        uint256 priceLP = calculatePriceOfLP();
 
-        uint256 rate = calculateRateFTM2BQB();
-        amountBQB = amountBQB.add(amountFTM.mul(rate).div(decimal));
-
-        return amountBQB.mul(decimal).div(IERC20(lpToken).totalSupply()); 
+        return priceLP.mul(decimal).div(priceBQB);
     }
 
     function calculatePriceOfLP() public view returns (uint256) {
-        uint256 amountBQB = calculateRateLP2BQB();
+        (, int priceFTM, , , ) = priceFeedOfFTM.latestRoundData();
+        uint256 priceBQB = calculatePriceOfBQB();
 
-        (, int price, , , ) = priceFeedOfFTM.latestRoundData();
+        (uint256 amountBQB, uint256 amountFTM, ) = 
+                IBloqBallPair(lpToken).getReserves();
 
-        uint256 rate = calculateRateBQB2FTM();
-        uint256 currentPriceOfBQB = uint256(price).mul(rate).div(decimal);
+        uint256 tvl = amountBQB.mul(priceBQB).add(amountFTM.mul(uint256(priceFTM)));
 
-        return currentPriceOfBQB.mul(amountBQB).div(decimal);
+        return tvl.div(IBloqBallPair(lpToken).totalSupply());
     }
 
     function calculatePriceOfBQB() public view returns (uint256) {
@@ -383,11 +381,11 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         require(enableBuyBack, "BuyBack is not available.");
 
         uint256 amount = balanceOfFTM();
-        amount = amount.mul(buybackRate).div(uint(10000));
+        amount = amount.mul(buybackRate).div(uint256(10000));
         buybackBQBforFTMbyRouter(amount);
 
         amount = balanceOfLP();
-        amount = amount.mul(buybackRate).div(uint(10000));
+        amount = amount.mul(buybackRate).div(uint256(10000));
         buybackBQBforLPbyRouter(amount);
     }
 
@@ -453,9 +451,9 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         bool enableBuyBack = isEnableBuyback();
         require(enableBuyBack, "BuyBack is not available.");
 
-        uint rate = calculateRateBQB2FTM();
+        uint256 rate = calculateRateBQB2FTM();
         uint tokenAmount = _amountofBQB.mul(rate).div(decimal);
-        tokenAmount = tokenAmount.add(tokenAmount.mul(discountRate).div(uint(10000)));
+        tokenAmount = tokenAmount.add(tokenAmount.mul(discountRate).div(uint256(10000)));
 
         require(address(this).balance >= tokenAmount, "Available FTM not sufficient to complete buying");
         require(payable(msg.sender).send(tokenAmount));
