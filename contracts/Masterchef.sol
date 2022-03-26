@@ -85,7 +85,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     // First day and default harvest interval
     uint256 public constant DEFAULT_HARVEST_INTERVAL = 1 minutes;
-    uint256 public constant MAX_HARVEST_INTERVAL = 20 minutes;  //1 days;
+    uint256 public constant MAX_HARVEST_INTERVAL = 15 minutes;  //1 days;
     uint256 public lockUpTaxRate = 50;                          // 50%
 
     // Info of each pool.
@@ -251,7 +251,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
     
     // Return reward multiplier over the given _from to _to block.
-    function getBQBRewardFromBlock(uint8 _pid) private view returns (uint256) {
+    function getBQBRewardFromBlock(uint8 _pid) public view returns (uint256) {
         if (!enableStartBQBReward) {
             return 0;
         }
@@ -425,7 +425,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     function availableRewardsForHarvest(uint8 _pid, address _user, uint256 accPerShare) 
-            private view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
+            public view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
         uint256 totalRewards;
         uint256 rewardRate;
         uint256 rewardDebt;
@@ -455,7 +455,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         totalRewardAmount = user.amount.mul(accPerShare).div(1e12).sub(totalRewardDebt);
     }
 
-    function updateDepositInfo(uint8 _pid, address _user) private {
+    function updateDepositInfo(uint8 _pid, address _user) public {
         PoolInfo storage pool = poolInfo[_pid];
         DepositInfo[] memory myDeposits =  depositInfo[_user][_pid];
 
@@ -467,7 +467,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     function calculateRewardRate(uint8 _pid, address _user, uint256 _depositIndex) 
-            private view returns (uint256 rewardRate) {
+            public view returns (uint256 rewardRate) {
         DepositInfo storage myDeposit =  depositInfo[_user][_pid][_depositIndex];
 
         if (myDeposit.nextWithdraw > block.timestamp) {
@@ -541,7 +541,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // Pay or lockup pending BloqBalls.
-    function payOrLockupPendingBQB(uint8 _pid) internal {
+    function payOrLockupPendingBQB(uint8 _pid) public {
         require(enableStaking[_pid] == true, 'Withdraw: DISABLE WITHDRAWING');
         
         PoolInfo storage pool = poolInfo[_pid];
@@ -577,7 +577,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     function sendDividends(uint256 amount) public onlyOperator {
-        require(amount < address(this).balance, 'sendDividends: Insufficient balance');
+        require(amount <= address(this).balance, 'sendDividends: Insufficient balance');
 
         (bool success,) = address(payable(dividendTracker)).call{value: amount}("");
 
@@ -625,7 +625,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         lockUpTaxRate = _limit;
     }
 
-    function removeAmountFromDeposits(address _user, uint8 _pid, uint256 _amount, uint256 _time) private {
+    function removeAmountFromDeposits(address _user, uint8 _pid, uint256 _amount, uint256 _time) public {
         uint256 length =  depositInfo[_user][_pid].length;
 
         for(uint256 i=0; i< length; i++) {
@@ -646,7 +646,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
     }
 
-    function removeEmptyDeposits(address user, uint8 _pid) private {
+    function removeEmptyDeposits(address user, uint8 _pid) public {
         for (uint256 i=0; i<depositInfo[user][_pid].length; i++) {
             while(depositInfo[user][_pid].length > 0 && depositInfo[user][_pid][i].amount  == 0) {
                 for (uint256 j = i; j<depositInfo[user][_pid].length-1; j++) {
