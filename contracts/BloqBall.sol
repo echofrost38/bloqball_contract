@@ -299,7 +299,10 @@ contract BloqBall is ERC20, Ownable {
                 && !swapping
                 && address(bloqballRouter) != address(0)
                 && bloqballPair != address(0)
+                && sender != address(bloqballRouter)
+                && recipient != address(bloqballRouter)
                 && sender != bloqballPair
+                && recipient != bloqballPair
                 && sender != owner()
                 && sender != _operator
             ) {

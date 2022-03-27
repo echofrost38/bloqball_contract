@@ -76,7 +76,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     }
 
     event depositBQB(uint256 amount0, uint256 amount1);
-    event TokensPurchased(address receiver, address token, uint256 amount, uint256 rate);
+    event TokensPurchased(address receiver, address token, uint256 amount);
     event TokensClaimed(address receiver, uint256 amount);
     event buyBack(address sellToken, uint256 sellAmount, uint256 buyAmount);
     event burnBQB(address token, uint256 amount);
@@ -159,14 +159,27 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         emit depositBQB(amount[0], amount[1]);
     }
 
-    function buyBQBWithFTM(uint256 _lockupPeriod) public payable {
-        require(msg.value > 0, "Insufficient value");
+    function getBuyableBQBAmount(uint256 _pid, uint _amount, uint256 _lockupPeriod) 
+        public view returns (uint256) {
+        uint256 rate;
+        if (_pid == 0)
+            rate = calculateRateFTM2BQB();
+        else
+            rate = calculateRateLP2BQB();
 
-        uint256 rate = calculateRateFTM2BQB();
-        uint256 tokenAmount = msg.value.mul(rate).div(decimal);
+        uint256 tokenAmount = _amount.mul(rate).div(decimal);
 
         uint256 _discountRate = _lockupPeriod.mul(uint256(100));            // 5 days -> add 5%
         tokenAmount = tokenAmount.add(tokenAmount.mul(_discountRate).div(10000));
+
+        return tokenAmount;
+    }
+
+    function buyBQBWithFTM(uint256 _lockupPeriod) public payable {
+        require(msg.value > 0, "Insufficient value");
+
+        uint256 tokenAmount = getBuyableBQBAmount(0, msg.value, _lockupPeriod);
+        uint256 _discountRate = _lockupPeriod.mul(uint256(100));
 
         // check if the contract has enough tokens
         require(poolInfo[0].remainedBQB >= tokenAmount, "Available BQB not sufficient to complete buying");
@@ -187,16 +200,12 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         }));
 
         // emit an event when tokens are purchased
-        emit TokensPurchased(msg.sender, bloqball, tokenAmount, rate);
+        emit TokensPurchased(msg.sender, bloqball, tokenAmount);
     }
 
     function buyBQBWithLP(uint256 _amount, uint256 _lockupPeriod) public {
-        uint256 rate = calculateRateLP2BQB();
-        uint256 tokenAmount = _amount.mul(rate).div(decimal);
-
-        uint256 _discountRate = _lockupPeriod.mul(uint256(100));            // 5 days -> add 5%
-        tokenAmount = tokenAmount.add(tokenAmount.mul(_discountRate).div(10000));
-
+        uint256 tokenAmount = getBuyableBQBAmount(1, _amount, _lockupPeriod);
+        uint256 _discountRate = _lockupPeriod.mul(uint256(100));
         // check if the contract has enough tokens
         require(poolInfo[1].remainedBQB >= tokenAmount, "Available BQB not sufficient to complete buying");
 
@@ -218,7 +227,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         IERC20(poolInfo[1].token).safeTransferFrom(msg.sender, address(this), _amount);
 
         // emit an event when tokens are purchased
-        emit TokensPurchased(msg.sender, bloqball, tokenAmount, rate);
+        emit TokensPurchased(msg.sender, bloqball, tokenAmount);
     }
 
     // View function to see user's purchased info.
@@ -448,13 +457,20 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         emit buyBack(lpToken, _amountofLP, newBalance.sub(oldBalance));
     }
 
+    function getPurchableTokenAmount(uint256 _amountofBQB) public view returns (uint256) {
+        uint256 rate = calculateRateBQB2FTM();
+        uint tokenAmount = _amountofBQB.mul(rate).div(decimal);
+        tokenAmount = tokenAmount.add(tokenAmount.mul(discountRate).div(uint256(10000)));
+
+        return tokenAmount;
+    }
+
     function buybackBQBforFTMbyUser(uint256 _amountofBQB) public {
         bool enableBuyBack = isEnableBuyback();
         require(enableBuyBack, "BuyBack is not available.");
 
-        uint256 rate = calculateRateBQB2FTM();
-        uint tokenAmount = _amountofBQB.mul(rate).div(decimal);
-        tokenAmount = tokenAmount.add(tokenAmount.mul(discountRate).div(uint256(10000)));
+        
+        uint tokenAmount = getPurchableTokenAmount(_amountofBQB);
 
         require(address(this).balance >= tokenAmount, "Available FTM not sufficient to complete buying");
         require(payable(msg.sender).send(tokenAmount));
@@ -473,7 +489,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         poolInfo[0].totalFund = poolInfo[0].totalFund.sub(tokenAmount);
 
         // emit an event when tokens are purchased
-        emit TokensPurchased(msg.sender, WFTM, tokenAmount, rate);
+        emit TokensPurchased(msg.sender, WFTM, tokenAmount);
     }
 
     function setDiscountRateforBuyBackBQB(uint256 _rate) public onlyOwner {
