@@ -33,6 +33,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
     uint256 private decimal = 10 ** 18;
+    uint256 private lockupPeriod = 15 minutes; //1 days;
 
     uint256[2] public allocPoints;
 
@@ -181,7 +182,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
             pid: 0,
             sellAmount: msg.value,
             buyAmount: tokenAmount,
-            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400)),
+            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(lockupPeriod)),
             discountRate: _discountRate
         }));
 
@@ -210,7 +211,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
             pid: 1,
             sellAmount: _amount,
             buyAmount: tokenAmount,
-            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(86400)),
+            lockupPeriod:block.timestamp.add(_lockupPeriod.mul(lockupPeriod)),
             discountRate: _discountRate
         }));
 

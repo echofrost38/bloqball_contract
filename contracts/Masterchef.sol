@@ -477,7 +477,11 @@ contract MasterChef is Ownable, ReentrancyGuard {
         uint256 elapsedTime = block.timestamp.sub(myDeposit.nextWithdraw);
 
         uint256 interval = elapsedTime.div(MAX_HARVEST_INTERVAL);
-        rewardRate = lockUpTaxRate.sub((interval.add(1)).mul(100));
+
+        if (lockUpTaxRate > (interval.add(1)).mul(100))
+            rewardRate = lockUpTaxRate.sub((interval.add(1)).mul(100));
+        else 
+            rewardRate = 0;
     }
 
     function availableForWithdraw(address _user, uint8 _pid) public view returns (uint256 totalAmount) {
