@@ -440,7 +440,10 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
 
         for(uint256 i=0; i< myDeposits.length; i++) {
-                      
+            if (myDeposit[i].nextWithdraw > block.timestamp) {
+                continue;
+            }
+
             rewardDebt = (myDeposits[i].amount).mul(myDeposits[i].accBloqBallPerShare).div(1e12);
             totalRewardDebt = totalRewardDebt.add(rewardDebt);
 
@@ -468,11 +471,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     function calculateRewardRate(uint8 _pid, address _user, uint256 _depositIndex) 
             public view returns (uint256 rewardRate) {
-        DepositInfo storage myDeposit =  depositInfo[_user][_pid][_depositIndex];
+        require(block.timestamp > myDeposit.nextWithdraw, 'Harvest: Lockup period');
 
-        if (myDeposit.nextWithdraw > block.timestamp) {
-            return lockUpTaxRate;
-        }
+        DepositInfo storage myDeposit =  depositInfo[_user][_pid][_depositIndex];
         
         uint256 elapsedTime = block.timestamp.sub(myDeposit.nextWithdraw);
 

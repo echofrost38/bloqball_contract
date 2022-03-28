@@ -351,7 +351,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         return uint256(price).mul(rate).div(decimal);
     }
     
-    function calculatBackingPriceOfBQB() public view returns (uint256) {
+    function calculateBackingPriceOfBQB() public view returns (uint256) {
         uint256 totalTreasuryBalance = treasuryBalance();
         uint256 totalSupply = (IERC20(bloqball).totalSupply()).sub(10000000 * decimal);        // sub amount of bqb in lottery
 
