@@ -44,7 +44,6 @@ contract MasterChef is Ownable, ReentrancyGuard {
         uint256 nextWithdraw;
         uint256 accBloqBallPerShare;
         uint256 taxAmount;
-        uint256 totalEarnedBQB;
     }
 
     mapping (address=> mapping(uint256=>DepositInfo[])) public depositInfo;
@@ -286,7 +285,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     // View function to see pending BQBs on frontend.
     function pendingBloqBall(uint8 _pid, address _user) 
-        external view returns (uint256 totalPending, uint256 claimablePending) {
+        public view returns (uint256 totalPending, uint256 claimablePending) {
         PoolInfo storage pool = poolInfo[_pid];
 
         uint256 accBloqBallPerShare = pool.accBloqBallPerShare;
@@ -497,7 +496,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
         if (myDeposit.nextWithdraw > block.timestamp) {
             return (totalRewardAmount, 0, 0);
-        }     
+        }
 
         rewardRate = calculateRewardRate(_pid, _user, depositIndex);     
         taxAmount = totalRewardAmount.mul(rewardRate).div(10000);
@@ -520,12 +519,12 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
 
         for(uint256 i=0; i< myDeposits.length; i++) {
+            rewardDebt = (myDeposits[i].amount).mul(myDeposits[i].accBloqBallPerShare).div(1e12);
+            totalRewardDebt = totalRewardDebt.add(rewardDebt);
+
             if (myDeposits[i].nextWithdraw > block.timestamp) {
                 continue;
             }
-
-            rewardDebt = (myDeposits[i].amount).mul(myDeposits[i].accBloqBallPerShare).div(1e12);
-            totalRewardDebt = totalRewardDebt.add(rewardDebt);
 
             totalRewards = (myDeposits[i].amount).mul(accPerShare).div(1e12);
             totalRewards = totalRewards.sub(rewardDebt);          

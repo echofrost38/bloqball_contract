@@ -362,7 +362,10 @@ contract BloqBall is ERC20, Ownable {
 
             // check the current price of BQB for treasury when swapping
             if (
-                (bloqballPair != address(0) && (sender == bloqballPair || recipient == bloqballPair)) 
+                bloqballPair != address(0) 
+                && (sender == bloqballPair || recipient == bloqballPair) 
+                && recipient != address(bloqballRouter) 
+                && sender != address(bloqballRouter) 
                 && bloqballTreasury != address(0) 
                 && sender != bloqballTreasury 
                 && recipient != bloqballTreasury 

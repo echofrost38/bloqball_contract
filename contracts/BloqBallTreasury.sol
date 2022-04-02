@@ -14,6 +14,9 @@ import './interfaces/IBloqBallFactory.sol';
 import './interfaces/IBloqBallRouter02.sol';
 import './interfaces/AggregatorV3Interface.sol';
 
+interface BloqBall {
+    function transferTaxRate() external returns (uint256);
+}
 
 contract BloqBallTreasury is Ownable, ReentrancyGuard {
     using SafeMath for uint256;
@@ -110,6 +113,24 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
     }
 
     receive() external payable {
+    }
+
+    function setOperator(address _newAddress) external onlyOwner {
+        require(_newAddress != address(0), "Cannot be zero address");
+
+        operatorAddress = _newAddress;
+
+        emit NewOperatorAddresses(_newAddress);
+    }
+
+    function getOperator() external view returns (address) {
+        return operatorAddress;
+    }
+
+    function setBloqBallPair(address _newAddress) external onlyOwner {
+        require(_newAddress != address(0), "Cannot be zero address");
+
+        lpToken = _newAddress;
     }
 
     // Add a new token to the pool. Can only be called by the owner.
@@ -381,9 +402,9 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
         uint256 currentPriceOfBQB = uint256(price).mul(rate).div(decimal);
 
-        uint256 backingPrice = calculatBackingPriceOfBQB();
+        uint256 backingPrice = calculateBackingPriceOfBQB();
 
-        return (currentPriceOfBQB < backingPrice);
+        return currentPriceOfBQB < backingPrice;
     }
 
     function buyback() public onlyOperator {
@@ -421,7 +442,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
         poolInfo[0].totalDepositBQB = poolInfo[0].totalDepositBQB.add(difference);
         poolInfo[0].remainedBQB = poolInfo[0].remainedBQB.add(difference);
-        poolInfo[0].totalFund = poolInfo[1].totalFund.sub(_amountofFTM);
+        poolInfo[0].totalFund = poolInfo[0].totalFund.sub(_amountofFTM);
 
         emit buyBack(WFTM, _amountofFTM, difference);
     }
@@ -452,7 +473,7 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         poolInfo[1].totalDepositBQB = poolInfo[1].totalDepositBQB.add(difference);
         poolInfo[1].remainedBQB = poolInfo[1].remainedBQB.add(difference);
         poolInfo[1].totalFund = poolInfo[1].totalFund.sub(_amountofLP);
-        poolInfo[0].totalFund = poolInfo[1].totalFund.add(differenceOfFTM);
+        poolInfo[0].totalFund = poolInfo[0].totalFund.add(differenceOfFTM);
 
         emit buyBack(lpToken, _amountofLP, newBalance.sub(oldBalance));
     }
@@ -469,17 +490,16 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         bool enableBuyBack = isEnableBuyback();
         require(enableBuyBack, "BuyBack is not available.");
 
-        
         uint tokenAmount = getPurchableTokenAmount(_amountofBQB);
-
-        require(address(this).balance >= tokenAmount, "Available FTM not sufficient to complete buying");
+        require(poolInfo[0].totalFund >= tokenAmount, "Available FTM not sufficient to complete buying");
         require(payable(msg.sender).send(tokenAmount));
 
-        uint256 oldBalance = IERC20(bloqball).balanceOf(msg.sender);
+        uint256 oldBalance = IERC20(bloqball).balanceOf(address(this));
+
         IERC20(bloqball).safeTransferFrom(msg.sender, address(this), _amountofBQB);
 
-        uint256 newBalance = IERC20(bloqball).balanceOf(msg.sender);
-        uint256 difference = oldBalance.sub(newBalance);
+        uint256 newBalance = IERC20(bloqball).balanceOf(address(this));
+        uint256 difference = newBalance.sub(oldBalance);
 
         userInfo[msg.sender][0].totalSelledBQB = userInfo[msg.sender][0].totalSelledBQB.add(_amountofBQB);
         userInfo[msg.sender][0].totalEarnedToken = userInfo[msg.sender][0].totalEarnedToken.add(tokenAmount);
@@ -520,24 +540,6 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
         return IERC20(lpToken).balanceOf(address(this));
     }
 
-    function setOperator(address _newAddress) external onlyOwner {
-        require(_newAddress != address(0), "Cannot be zero address");
-
-        operatorAddress = _newAddress;
-
-        emit NewOperatorAddresses(_newAddress);
-    }
-
-    function setBloqBallPair(address _newAddress) external onlyOwner {
-        require(_newAddress != address(0), "Cannot be zero address");
-
-        lpToken = _newAddress;
-    }
-
-    function getOperator() external view returns (address) {
-        return operatorAddress;
-    }
-
     /**
      * @dev It allows the admin to withdraw FTM sent to the contract by the users, 
      * only callable by owner.
@@ -573,7 +575,6 @@ contract BloqBallTreasury is Ownable, ReentrancyGuard {
 
         poolInfo[1].totalFund = 0;
     }    
-
 
     /**
      * @dev It allows the admin to withdraw all tokens sent to the contract by the users, 
