@@ -473,7 +473,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     function availableIndividualRewardsForHarvest (uint8 _pid, address _user, uint256 accPerShare, uint256 depositIndex) 
-            public view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
+            internal view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
         uint256 rewardRate;
         uint256 rewardDebt;
 
@@ -504,7 +504,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     function availableRewardsForHarvest(uint8 _pid, address _user, uint256 accPerShare) 
-            public view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
+            internal view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
         uint256 totalRewards;
         uint256 rewardRate;
         uint256 rewardDebt;
@@ -537,7 +537,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         totalRewardAmount = user.amount.mul(accPerShare).div(1e12).sub(totalRewardDebt);
     }
 
-    function updateDepositInfo(uint8 _pid, address _user) public {
+    function updateDepositInfo(uint8 _pid, address _user) internal {
         PoolInfo storage pool = poolInfo[_pid];
         DepositInfo[] memory myDeposits =  depositInfo[_user][_pid];
 
@@ -548,7 +548,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
     }
 
-    function updateDepositInfo(uint8 _pid, address _user, uint256 _depositIndex) public {
+    function updateDepositInfo(uint8 _pid, address _user, uint256 _depositIndex) internal {
         PoolInfo storage pool = poolInfo[_pid];
         DepositInfo memory myDeposit =  depositInfo[_user][_pid][_depositIndex];
 
@@ -570,7 +570,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     function calculateRewardRate(uint8 _pid, address _user, uint256 _depositIndex) 
-            public view returns (uint256 rewardRate) {
+            internal view returns (uint256 rewardRate) {
         DepositInfo storage myDeposit =  depositInfo[_user][_pid][_depositIndex];
 
         if (block.timestamp < myDeposit.nextWithdraw)
@@ -647,7 +647,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // Pay or lockup pending BloqBalls.
-    function payOrLockupPendingBQB(uint8 _pid) public {
+    function payOrLockupPendingBQB(uint8 _pid) internal {
         require(enableStaking[_pid] == true, 'Withdraw: DISABLE WITHDRAWING');
         
         PoolInfo storage pool = poolInfo[_pid];
@@ -673,7 +673,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // Pay or lockup pending BloqBalls.
-    function payOrLockupPendingBQB(uint8 _pid, uint256 _depositIndex) public {
+    function payOrLockupPendingBQB(uint8 _pid, uint256 _depositIndex) internal {
         require(enableStaking[_pid] == true, 'Withdraw: DISABLE WITHDRAWING');
         
         PoolInfo storage pool = poolInfo[_pid];
@@ -758,7 +758,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         lockUpTaxRate = _limit;
     }
 
-    function removeAmountFromDeposits(address _user, uint8 _pid, uint256 _amount, uint256 _time) public {
+    function removeAmountFromDeposits(address _user, uint8 _pid, uint256 _amount, uint256 _time) internal {
         uint256 length =  depositInfo[_user][_pid].length;
 
         for(uint256 i=0; i< length; i++) {
@@ -779,7 +779,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
     }
 
-    function removeEmptyDeposits(address user, uint8 _pid) public {
+    function removeEmptyDeposits(address user, uint8 _pid) internal {
         for (uint256 i=0; i<depositInfo[user][_pid].length; i++) {
             while(depositInfo[user][_pid].length > 0 && depositInfo[user][_pid][i].amount  == 0) {
                 for (uint256 j = i; j<depositInfo[user][_pid].length-1; j++) {
