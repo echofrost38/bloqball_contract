@@ -2001,9 +2001,6 @@ contract MasterChef is Ownable, ReentrancyGuard {
     
     // The BQB TOKEN!
     address public bloqball;
-    
-    // The count of BQB transfered from transaction fees.
-    uint256 private totalAmountFromFee = 0;
 
     // The count of BQB transfered from reward fees.
     uint256 private totalAmountFromFeeByRewards = 0;
@@ -2013,14 +2010,15 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     // BQB tokens created per block.
     uint256 public BQBPerBlock = 1 * 10**18;
-    uint256 public initialBQBPerBlock = 10 * 10 ** 18;        // 10 BQB until first 10 days
+    uint256 public initialBQBPerBlock = 10 * 10 ** 18;          // 10 BQB until first 10 days
 
     // Bonus muliplier for early BQB makers.
     uint256 public constant BONUS_MULTIPLIER = 1;
 
     // First day and default harvest interval
     uint256 public constant DEFAULT_HARVEST_INTERVAL = 1 minutes;
-    uint256 public constant MAX_HARVEST_INTERVAL = 1 days;
+    uint256 public constant MAX_HARVEST_INTERVAL = 15 minutes;  //1 days;
+    uint256 public lockUpTaxRate = 5000;                        // 50%
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -2031,32 +2029,28 @@ contract MasterChef is Ownable, ReentrancyGuard {
     // Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
 
-    // The block number when BQB mining starts.
-    uint256 public startBlock;
-
     // BQB referral contract address.
     IBloqBallReferral public BloqBallReferral;
     
-    struct amountRewardAtTime {
-        uint256 timestamp;
-        uint256 totalAmountFromFee;
-    }
-
-    mapping(uint256 => amountRewardAtTime) private currentFeeIdofRewardAtTime;
-    uint256 private currentFeeID;
-
     // Referral commission rate in basis points.
     uint16 public referralCommissionRate = 100;
     
     // Max referral commission rate: 10%.
     uint16 public constant MAXIMUM_REFERRAL_COMMISSION_RATE = 1000;
     
-    mapping(uint8 => bool) public enableStaking;
-    mapping(uint8 => uint256) public startTimeOfPool;
-
+    // The block number and timestamp when BQB mining starts.
     bool public enableStartBQBReward = false;
-    
-    uint256 public limitDaysOfRewardTax = 50;
+    uint256 public startBlock;
+
+    mapping(uint8 => bool) public enableStaking;
+
+    // Informations to get daily FTM reward for calculating APR of FTM rewards in staking BQB
+    struct FTMRewardInfo {
+        uint256 timestamp;
+        uint256 totalAmountFromFee;
+    }
+    mapping(uint256 => FTMRewardInfo) public ftmRewardInfoAtId;
+    uint public currentFTMRewardID;
     
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -2081,7 +2075,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     constructor (address _bloqball) {
         dividendTracker = new BloqBallStakingDividendTracker();
-
+        
         bloqball = _bloqball;
 
         feeAddress = msg.sender;
@@ -2093,14 +2087,26 @@ contract MasterChef is Ownable, ReentrancyGuard {
 
     function setEnableStaking(uint8 _pid, bool _bEnable) external onlyOwner {
         enableStaking[_pid] = _bEnable;
-        startTimeOfPool[_pid] = block.timestamp;
+    }
+
+    // set to start the BQB rewards per block
+    function setStartBQBReward() public onlyOwner {
+        enableStartBQBReward = true;
+        
+        startBlock = block.number;
+        uint256 length = poolInfo.length;
+        
+        for (uint256 pid = 0; pid < length; ++pid) {
+            poolInfo[pid].lastRewardBlock = 
+                block.number > poolInfo[pid].lastRewardBlock ? block.number : poolInfo[pid].lastRewardBlock;
+        }
     }
 
     /**
-     * @dev Transfers operator of the contract to a new account (`newOperator`).
+     * @dev Set operator of the contract to a new account (`newOperator`).
      * Can only be called by the current operator.
      */
-    function transferOperator(address newOperator) public onlyOwner {
+    function setOperator(address newOperator) public onlyOwner {
         require(newOperator != address(0), "BloqBall::transferOperator: new operator is the zero address");
         emit OperatorTransferred(_operator, newOperator);
 
@@ -2150,19 +2156,6 @@ contract MasterChef is Ownable, ReentrancyGuard {
         return _to.sub(_from).mul(BONUS_MULTIPLIER);
     }
     
-    // set to start the BQB rewards per block
-    function setStartBQBReward() public onlyOwner {
-        enableStartBQBReward = true;
-        
-        startBlock = block.number;
-        uint256 length = poolInfo.length;
-        
-        for (uint256 pid = 0; pid < length; ++pid) {
-            poolInfo[pid].lastRewardBlock = 
-                block.number > poolInfo[pid].lastRewardBlock ? block.number : poolInfo[pid].lastRewardBlock;
-        }
-    }
-    
     // Return total reward multiplier over the given _from to _to block.
     function getTotalBQBRewardFromBlock() public view returns (uint256) {
         if (!enableStartBQBReward) {
@@ -2170,7 +2163,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
             
         uint256 multiplier;
-        uint256 bloqBallReward = 0;
+        uint256 bloqBallReward;
 
         uint256 midBlock = startBlock + 10 days;           // 10 days from start day
 
@@ -2190,7 +2183,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
     
     // Return reward multiplier over the given _from to _to block.
-    function getBQBRewardFromBlock(uint8 _pid) private view returns (uint256) {
+    function getBQBRewardFromBlock(uint8 _pid) public view returns (uint256) {
         if (!enableStartBQBReward) {
             return 0;
         }
@@ -2223,14 +2216,16 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // View function to see pending BQBs on frontend.
-    function pendingBloqBall(uint8 _pid, address _user, bool bAll) external view returns (uint256) {
+    function pendingBloqBall(uint8 _pid, address _user) 
+        public view returns (uint256 totalPending, uint256 claimablePending) {
         PoolInfo storage pool = poolInfo[_pid];
 
         uint256 accBloqBallPerShare = pool.accBloqBallPerShare;
         uint256 lpSupply = pool.totalStakedTokens; //pool.lpToken.balanceOf(address(this));
 
-        if (lpSupply == 0)
-            return 0;
+        if (lpSupply == 0) {
+            return (0, 0);
+        }
 
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 bloqBallReward = getBQBRewardFromBlock(_pid).mul(pool.allocPoint).div(totalAllocPoint);
@@ -2242,15 +2237,54 @@ contract MasterChef is Ownable, ReentrancyGuard {
             accBloqBallPerShare = accBloqBallPerShare.add(bloqBallReward.mul(1e12).div(lpSupply));
         }
 
-        (uint256 totalPending, uint256 claimablePending, ) = 
+        (uint256 _totalPending, uint256 _claimablePending, ) = 
             availableRewardsForHarvest(_pid, _user, accBloqBallPerShare);
-            
-        if (bAll) {
-            return totalPending;
+
+        totalPending = _totalPending;
+        claimablePending = _claimablePending;
+    }
+
+    function pendingBloqBallForDeposit(uint8 _pid, address _user, uint256 _depositIndex) 
+        public view returns (uint256 totalPending, uint256 claimablePending) {
+        PoolInfo storage pool = poolInfo[_pid];
+
+        uint256 accBloqBallPerShare = pool.accBloqBallPerShare;
+        uint256 lpSupply = pool.totalStakedTokens; //pool.lpToken.balanceOf(address(this));
+
+        if (lpSupply == 0) {
+            return (0, 0);
         }
-        else {
-            return claimablePending;
+
+        if (block.number > pool.lastRewardBlock && lpSupply != 0) {
+            uint256 bloqBallReward = getBQBRewardFromBlock(_pid).mul(pool.allocPoint).div(totalAllocPoint);
+
+            if (address(pool.lpToken) == bloqball) {
+                bloqBallReward = bloqBallReward.add(totalAmountFromFeeByRewards);
+            }
+
+            accBloqBallPerShare = accBloqBallPerShare.add(bloqBallReward.mul(1e12).div(lpSupply));
         }
+
+        (uint256 _totalPending, uint256 _claimablePending, ) = 
+            availableIndividualRewardsForHarvest(_pid, _user, accBloqBallPerShare, _depositIndex);
+
+        totalPending = _totalPending;
+        claimablePending = _claimablePending;
+    }
+
+    function getEarnedTokenInfo(uint8 _pid, address _user) external view returns (uint256[] memory, uint256[] memory) {
+        DepositInfo[] memory myDeposits =  depositInfo[_user][_pid];
+
+        uint256[] memory totalPendingTokenInfo = new uint256[](myDeposits.length);
+        uint256[] memory claimablePendingTokenInfo = new uint256[](myDeposits.length);
+
+        for(uint256 i=0; i< myDeposits.length; i++) {
+            (uint256 totalAmount, uint256 pendingAmount) = pendingBloqBallForDeposit(_pid, _user, i);
+            totalPendingTokenInfo[i] = totalAmount;
+            claimablePendingTokenInfo[i] = pendingAmount;
+        }
+
+        return (totalPendingTokenInfo, claimablePendingTokenInfo);
     }
 
     // View function to see if user can harvest BloqBalls.
@@ -2363,8 +2397,46 @@ contract MasterChef is Ownable, ReentrancyGuard {
         payOrLockupPendingBQB(_pid);
     }
 
+    function harvestForDeposit(uint8 _pid, uint256 _depositIndex) public nonReentrant {
+        require(enableStaking[_pid] == true, 'Deposite: DISABLE DEPOSITING');
+
+        updatePool(_pid);
+        payOrLockupPendingBQB(_pid, _depositIndex);
+    }
+
+    function availableIndividualRewardsForHarvest (uint8 _pid, address _user, uint256 accPerShare, uint256 depositIndex) 
+            internal view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
+        uint256 rewardRate;
+        uint256 rewardDebt;
+
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][_user];
+        DepositInfo memory myDeposit =  depositInfo[_user][_pid][depositIndex];
+
+        if (address(pool.lpToken) == bloqball) {
+            accPerShare = accPerShare.sub(user.taxAmount.mul(1e12).div(pool.totalStakedTokens));
+        }
+
+        rewardDebt =  myDeposit.amount.mul(myDeposit.accBloqBallPerShare).div(1e12);
+        totalRewardAmount = myDeposit.amount.mul(accPerShare).div(1e12);
+
+        if (rewardDebt > totalRewardAmount) {       // no rewards yet
+            return (0, 0, 0);
+        }
+
+        totalRewardAmount = totalRewardAmount.sub(rewardDebt);
+
+        if (myDeposit.nextWithdraw > block.timestamp) {
+            return (totalRewardAmount, 0, 0);
+        }
+
+        rewardRate = calculateRewardRate(_pid, _user, depositIndex);     
+        taxAmount = totalRewardAmount.mul(rewardRate).div(10000);
+        rewardAmount = totalRewardAmount.sub(taxAmount);
+    }
+
     function availableRewardsForHarvest(uint8 _pid, address _user, uint256 accPerShare) 
-            private view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
+            internal view returns (uint256 totalRewardAmount, uint256 rewardAmount, uint256 taxAmount) {
         uint256 totalRewards;
         uint256 rewardRate;
         uint256 rewardDebt;
@@ -2379,20 +2451,25 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
 
         for(uint256 i=0; i< myDeposits.length; i++) {
-            rewardRate = calculateRewardRate(_pid, _user, i);               
             rewardDebt = (myDeposits[i].amount).mul(myDeposits[i].accBloqBallPerShare).div(1e12);
             totalRewardDebt = totalRewardDebt.add(rewardDebt);
-            totalRewards = (myDeposits[i].amount).mul(accPerShare).div(1e12);
-            totalRewards = totalRewards.sub(rewardDebt);            
 
-            rewardAmount = rewardAmount.add(totalRewards.mul(rewardRate).div(10000));
-            taxAmount = taxAmount.add(totalRewards.sub(totalRewards.mul(rewardRate).div(10000)));
+            if (myDeposits[i].nextWithdraw > block.timestamp) {
+                continue;
+            }
+
+            totalRewards = (myDeposits[i].amount).mul(accPerShare).div(1e12);
+            totalRewards = totalRewards.sub(rewardDebt);          
+
+            rewardRate = calculateRewardRate(_pid, _user, i);     
+            taxAmount = taxAmount.add(totalRewards.mul(rewardRate).div(10000));
+            rewardAmount = rewardAmount.add(totalRewards.sub(totalRewards.mul(rewardRate).div(10000)));
         }
 
         totalRewardAmount = user.amount.mul(accPerShare).div(1e12).sub(totalRewardDebt);
     }
 
-    function updateDepositInfo(uint8 _pid, address _user) private {
+    function updateDepositInfo(uint8 _pid, address _user) internal {
         PoolInfo storage pool = poolInfo[_pid];
         DepositInfo[] memory myDeposits =  depositInfo[_user][_pid];
 
@@ -2403,26 +2480,45 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
     }
 
-    function calculateRewardRate(uint8 _pid, address _user, uint256 _depositIndex) 
-            private view returns (uint256 rewardRate) {
-        DepositInfo storage myDeposit =  depositInfo[_user][_pid][_depositIndex];
+    function updateDepositInfo(uint8 _pid, address _user, uint256 _depositIndex) internal {
+        PoolInfo storage pool = poolInfo[_pid];
+        DepositInfo memory myDeposit =  depositInfo[_user][_pid][_depositIndex];
 
-        if (myDeposit.nextWithdraw > block.timestamp) {
-            return 0;
-        }
-        
-        uint256 elapsedTime = block.timestamp.sub(myDeposit.nextWithdraw);
-        
-        if (elapsedTime > limitDaysOfRewardTax.mul(MAX_HARVEST_INTERVAL)) {
-            rewardRate = 9900;          // 99%
-        }
-        else {
-            uint256 interval = elapsedTime.div(MAX_HARVEST_INTERVAL);
-            rewardRate = (uint256(10000)).sub((limitDaysOfRewardTax.sub(interval)).mul(uint256(100)));
+        if(myDeposit.nextWithdraw < block.timestamp) {
+            depositInfo[_user][_pid][_depositIndex].accBloqBallPerShare = pool.accBloqBallPerShare;
         }
     }
 
-    function availableForWithdraw(address _user, uint8 _pid) private view returns (uint256 totalAmount) {
+    function getTaxInfo(uint8 _pid, address _user) external view returns (uint256[] memory) {
+        DepositInfo[] memory myDeposits =  depositInfo[_user][_pid];
+
+        uint256[] memory taxInfo = new uint256[](myDeposits.length);
+
+        for(uint256 i=0; i< myDeposits.length; i++) {
+            taxInfo[i] = calculateRewardRate(_pid, _user, i);
+        }
+
+        return taxInfo;
+    }
+
+    function calculateRewardRate(uint8 _pid, address _user, uint256 _depositIndex) 
+            internal view returns (uint256 rewardRate) {
+        DepositInfo storage myDeposit =  depositInfo[_user][_pid][_depositIndex];
+
+        if (block.timestamp < myDeposit.nextWithdraw)
+            return lockUpTaxRate;
+
+        uint256 elapsedTime = block.timestamp.sub(myDeposit.nextWithdraw);
+
+        uint256 interval = elapsedTime.div(MAX_HARVEST_INTERVAL);
+
+        if (lockUpTaxRate > (interval.add(1)).mul(100))
+            rewardRate = lockUpTaxRate.sub((interval.add(1)).mul(100));
+        else 
+            rewardRate = 0;
+    }
+
+    function availableForWithdraw(address _user, uint8 _pid) public view returns (uint256 totalAmount) {
         totalAmount = 0;
         DepositInfo[] memory myDeposits =  depositInfo[_user][_pid];
         for(uint256 i=0; i< myDeposits.length; i++) {
@@ -2507,6 +2603,33 @@ contract MasterChef is Ownable, ReentrancyGuard {
             }
         }
     }
+
+    // Pay or lockup pending BloqBalls.
+    function payOrLockupPendingBQB(uint8 _pid, uint256 _depositIndex) internal {
+        require(enableStaking[_pid] == true, 'Withdraw: DISABLE WITHDRAWING');
+        
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+
+        (, uint256 claimablePending, uint256 taxPending) = 
+            availableIndividualRewardsForHarvest(_pid, msg.sender, pool.accBloqBallPerShare, _depositIndex);
+
+        if (canHarvest(_pid, msg.sender)) {
+            if (claimablePending > 0) {
+                totalAmountFromFeeByRewards = totalAmountFromFeeByRewards.add(taxPending);
+                user.nextHarvestUntil = block.timestamp.add(pool.harvestInterval);
+
+                // send BQB rewards
+                safeBQBTransfer(msg.sender, claimablePending);
+                payReferralCommission(msg.sender, claimablePending);
+
+                user.totalEarnedBQB = user.totalEarnedBQB.add(claimablePending);
+                user.taxAmount = taxPending;
+
+                updateDepositInfo(_pid, msg.sender, _depositIndex);
+            }
+        }
+    }
     
     // Safe BQB transfer function, just in case if rounding error causes pool to not have enough BloqBalls.
     function safeBQBTransfer(address _to, uint256 _amount) internal {   
@@ -2519,14 +2642,41 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     function sendDividends(uint256 amount) public onlyOperator {
-        require(amount < address(this).balance, 'sendDividends: Insufficient balance');
+        require(amount <= address(this).balance, 'sendDividends: Insufficient balance');
 
         (bool success,) = address(payable(dividendTracker)).call{value: amount}("");
 
         if (success) {
             dividendTracker.distributeDividends(amount);
             emit SendDividends(amount);
+
+            ftmRewardInfoAtId[currentFTMRewardID].timestamp = block.timestamp;
+            ftmRewardInfoAtId[currentFTMRewardID].totalAmountFromFee = dividendTracker.totalDividendsDistributed();
+            
+            currentFTMRewardID ++;
         }
+    }
+
+    function getRewardsFTMofPeriod(uint256 period) external view returns (uint256) {
+        uint oldDay = block.timestamp - period * 1 days;
+        uint256 newFTMReward;
+        uint256 ftmRewardOfOldDay;
+        
+        if (currentFTMRewardID < 1) {
+            return 0;
+        }
+        
+        for (uint i=currentFTMRewardID-1; i>= 0; i--) {
+            if (ftmRewardInfoAtId[currentFTMRewardID].timestamp < oldDay) {
+                ftmRewardOfOldDay = ftmRewardInfoAtId[currentFTMRewardID].totalAmountFromFee;
+                break;
+            }
+        }
+
+        uint256 totalFTMReward = dividendTracker.totalDividendsDistributed();
+        newFTMReward = totalFTMReward - ftmRewardOfOldDay;
+        
+        return newFTMReward;
     }
 
     function setFeeAddress(address _feeAddress) public {
@@ -2535,12 +2685,12 @@ contract MasterChef is Ownable, ReentrancyGuard {
         feeAddress = _feeAddress;
     }
     
-    function setLimitPeriodOfRewardTax(uint256 _limit) public onlyOwner {
-        require(_limit <= 100, 'Limit Period: can not over 100 days');
-        limitDaysOfRewardTax = _limit;
+    function setLockUpTaxRate(uint256 _limit) public onlyOwner {
+        require(_limit <= 10000, 'Limit Period: can not over 100%');
+        lockUpTaxRate = _limit;
     }
 
-    function removeAmountFromDeposits(address _user, uint8 _pid, uint256 _amount, uint256 _time) private {
+    function removeAmountFromDeposits(address _user, uint8 _pid, uint256 _amount, uint256 _time) internal {
         uint256 length =  depositInfo[_user][_pid].length;
 
         for(uint256 i=0; i< length; i++) {
@@ -2561,7 +2711,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         }
     }
 
-    function removeEmptyDeposits(address user, uint8 _pid) private {
+    function removeEmptyDeposits(address user, uint8 _pid) internal {
         for (uint256 i=0; i<depositInfo[user][_pid].length; i++) {
             while(depositInfo[user][_pid].length > 0 && depositInfo[user][_pid][i].amount  == 0) {
                 for (uint256 j = i; j<depositInfo[user][_pid].length-1; j++) {

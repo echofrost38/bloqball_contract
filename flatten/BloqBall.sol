@@ -1134,9 +1134,10 @@ contract BloqBall is ERC20, Ownable {
     address private _operator;
 
     // Tax rate in basis points.
-    uint16 public transferTaxRate = 100;    // 1%
-    uint16 public burnRate = 0;             // 0% of transferTaxRate for burn tax
-    uint16 public liquidityRate = 0;        // 0% of transferTaxRate for liquidity tax
+    uint256 public transferTaxRate = 100;    // 1%
+    uint256 public burnRate = 0;             // 0% of transferTaxRate for burn tax
+    uint256 public liquidityRate = 0;        // 0% of transferTaxRate for liquidity tax
+    uint256 public stakingRate = 10000;      // 100% of transferTaxRate for staking tax
 
     // exlcude from fees and max transaction amount
     mapping (address => bool) private _isExcludedFromFees;
@@ -1147,9 +1148,9 @@ contract BloqBall is ERC20, Ownable {
     // Burn address
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 public initialSupply = 10_000_000 * (10 ** 18);      // 10M BQB
+    uint256 public initialSupply = 10_000_000 * (10 ** 18);         // 10M BQB
 
-    uint256 public swapAndSendTokensAtAmount = 2_000_000 * (10**18);
+    uint256 public swapAndSendTokensAtAmount = 1_000 * (10**18);    // 1000 BQB
     
     // Max transfer amount rate in basis points. (default is 0.5% of total supply)
     uint16 public maxTransferAmountRate = 50;
@@ -1157,8 +1158,8 @@ contract BloqBall is ERC20, Ownable {
     // Addresses that excluded from antiWhale
     mapping(address => bool) private _excludedFromAntiWhale;
     
-    mapping(address => bool) private _bqbHolderInfo;
-    uint256  public totalCountofBQBHolders = 0;
+    mapping(address => bool) public _bqbHolderInfo;
+    uint256  public totalCountofBQBHolders;
 
     mapping(address => bool) public _isBlacklisted;
 
@@ -1166,17 +1167,11 @@ contract BloqBall is ERC20, Ownable {
     IBloqBallRouter02 public bloqballRouter;
     address public bloqballPair;
     
-    // Automatic swap and liquify enabled
-    bool public swapAndLiquifyEnabled = false;
-    
-    // Min amount to liquify. (default 500 BQBs)
-    uint256 public minAmountToLiquify = 500 * (10 ** 18); // 500 BQB
-
     // In swap and liquify
-    bool private _inSwapAndLiquify;
+    bool private swapping;
 
     // Parameters to mint tokens to developer
-    address private _developer = address(0x1c62e6f7dD3BD5ef0999080056c289d600Ee31Ec);
+    address private _developer = address(0x2C4C168A2fE4CaB8E32d1B2A119d4Aa8BdA377e7);
     uint256 private lastMinttoDev;
     uint256 private totalMintedBQBofDev;
     uint256 constant MAXIMUM_TRANSFER_TO_DEVELOPER = 10_000_000 * 10 ** 18;        // 10M BQB for developer
@@ -1196,7 +1191,7 @@ contract BloqBall is ERC20, Ownable {
     uint256 public limitRateForTreasury;
 
     // updatable count for different contracts
-    uint8 constant MAXIMUM_UPDATE_CONTRACT = 10;
+    uint8 constant private MAXIMUM_UPDATE_CONTRACT = 3;
     uint8 private _updateRouterCount;
     uint8 private _updateMasterchefCount;
     uint8 private _updateLotteryCount;
@@ -1224,6 +1219,12 @@ contract BloqBall is ERC20, Ownable {
         _;
     }
 
+    modifier onlyOperatorOrDeveloper() {
+        require(_operator == msg.sender || _developer == msg.sender, 
+            "operator: caller is not the operator or developer");
+        _;
+    }
+
     modifier antiWhale(address sender, address recipient, uint256 amount) {
         if (maxTransferAmount() > 0) {
             if (
@@ -1237,14 +1238,8 @@ contract BloqBall is ERC20, Ownable {
         _;
     }
 
-    modifier lockTheSwap {
-        _inSwapAndLiquify = true;
-        _;
-        _inSwapAndLiquify = false;
-    }
-
     modifier transferTaxFree {
-        uint16 _transferTaxRate = transferTaxRate;
+        uint256 _transferTaxRate = transferTaxRate;
         transferTaxRate = 0;
         _;
         transferTaxRate = _transferTaxRate;
@@ -1262,14 +1257,18 @@ contract BloqBall is ERC20, Ownable {
         _excludedFromAntiWhale[address(0)] = true;
         _excludedFromAntiWhale[address(this)] = true;
         _excludedFromAntiWhale[BURN_ADDRESS] = true;
-        _excludedFromAntiWhale[_developer] = true;
 
         // exclude from paying fees or having max transaction amount
         excludeFromFees(_operator, true);
+        excludeFromFees(address(0), true);
         excludeFromFees(address(this), true);
-        excludeFromFees(_developer, true);
+        excludeFromFees(BURN_ADDRESS, true);
 
         _mint(_operator, initialSupply);
+
+        // update the token holder
+        totalCountofBQBHolders++;
+        _bqbHolderInfo[_operator] = true;
     }
 
     /**
@@ -1293,7 +1292,8 @@ contract BloqBall is ERC20, Ownable {
         excludeFromFees(_operator, true);
     }
     
-    function mintToDeveloper(uint256 _amount) external onlyOperator {
+    function mintToDeveloper(uint256 _amount) external {
+        require(_developer == msg.sender, "developer: caller is not the operator or developer");
         require(_amount <= MAXIMUM_TRANSFER_TO_DEVELOPER_MONTHLY, "BloqBall::transfer: too much amount monthly");
         require(block.timestamp - lastMinttoDev > 30 days, 'Need to wait 1 month');
         require(totalMintedBQBofDev < MAXIMUM_TRANSFER_TO_DEVELOPER, 'BloqBall::transfer: too much amount');
@@ -1322,7 +1322,21 @@ contract BloqBall is ERC20, Ownable {
         bloqballRouter = IBloqBallRouter02(_router);
         bloqballPair = IBloqBallFactory(bloqballRouter.factory()).getPair(address(this), bloqballRouter.WFTM());
 
+        excludeFromFees(_router, true);
+
         emit BloqBallRouterUpdated(msg.sender, address(bloqballRouter), bloqballPair);
+    }
+
+    function setBurnRate(uint256 value) external onlyOperator{
+        burnRate = value;
+    }
+
+    function setLiquidityRate(uint256 value) external onlyOperator{
+        liquidityRate = value;
+    }
+
+    function setStakingRate(uint256 value) external onlyOperator{
+        stakingRate = value;
     }
 
     function excludeFromFees(address account, bool excluded) public onlyOperator {
@@ -1363,9 +1377,9 @@ contract BloqBall is ERC20, Ownable {
         if (recipient == BURN_ADDRESS || transferTaxRate == 0) {
             super._transfer(sender, recipient, amount);
         } else {
-            require(sender != address(0), "ERC20: transfer from the zero address");
-            require(recipient != address(0), "ERC20: transfer to the zero address");
-            require(!_isBlacklisted[sender] && !_isBlacklisted[recipient], 'Blacklisted address');
+            require(sender != address(0), "BloqBall: transfer from the zero address");
+            require(recipient != address(0), "BloqBall: transfer to the zero address");
+            require(!_isBlacklisted[sender] && !_isBlacklisted[recipient], 'BloqBall: Blacklisted address');
 
             if(amount == 0) {
                 super._transfer(sender, recipient, 0);
@@ -1379,32 +1393,42 @@ contract BloqBall is ERC20, Ownable {
             // swap and liquify, send fee to masterchef.
             if (
                 canSwapAndSendFee == true
+                && !swapping
                 && address(bloqballRouter) != address(0)
                 && bloqballPair != address(0)
+                && sender != address(bloqballRouter)
+                && recipient != address(bloqballRouter)
                 && sender != bloqballPair
+                && recipient != bloqballPair
                 && sender != owner()
                 && sender != _operator
             ) {
-                uint256 taxAmount = contractTokenBalance.mul(transferTaxRate).div(10000);
-                uint256 burnAmount = taxAmount.mul(burnRate).div(10000);
-                uint256 liquidityAmount = taxAmount.mul(liquidityRate).div(10000);
-                uint256 stakeAmount =  taxAmount.sub(burnAmount).sub(liquidityAmount);
+                swapping = true;
 
+                uint256 totalFeeRate = burnRate.add(liquidityRate).add(stakingRate);
+                require(totalFeeRate == 10000, "BloqBall: Total Fee Rate is wrong");  // total Fee Rate must be 100%.
+
+                uint256 burnAmount = contractTokenBalance.mul(burnRate).div(10000);
+                uint256 liquidityAmount = contractTokenBalance.mul(liquidityRate).div(10000);
+                uint256 stakeAmount =  contractTokenBalance.sub(burnAmount).sub(liquidityAmount);
+
+                // Burn token
                 if (burnAmount > 0)
-                    super._transfer(sender, BURN_ADDRESS, burnAmount);
+                    super._transfer(address(this), BURN_ADDRESS, burnAmount);
+
+                // Send fee for liquidity
+                if (liquidityAmount > 0)
+                    swapAndLiquify(liquidityAmount);
 
                 // send fee for staking 
                 if (stakeAmount > 0 && bloqballMasterchef != address(0)) {
                     swapAndSendDividends(stakeAmount);
                 }
 
-                if (liquidityAmount > 0 
-                    && swapAndLiquifyEnabled == true
-                    && _inSwapAndLiquify == false)
-                    swapAndLiquify();
+                swapping = false;
             }
 
-            bool takeFee = true;
+            bool takeFee = !swapping;
 
             // if any account belongs to _isExcludedFromFee account then remove the fee
             if(_isExcludedFromFees[sender] || _isExcludedFromFees[recipient]) {
@@ -1424,21 +1448,30 @@ contract BloqBall is ERC20, Ownable {
             updateHolders(sender, recipient);
             
             // check the status of lottery
-            if (bloqballlottery != address(0) 
-                && BloqBallLottery(bloqballlottery).getOperator() == address(this)) {
+            if (
+                bloqballlottery != address(0) 
+                && sender != bloqballlottery 
+                && recipient != bloqballlottery 
+                && BloqBallLottery(bloqballlottery).getOperator() == address(this)
+                ) {
                 BloqBallLottery(bloqballlottery).checkLotteryState();
             }
 
             // check the current price of BQB for treasury when swapping
             if (
-                (bloqballPair != address(0) 
-                    && (sender == bloqballPair || recipient == bloqballPair)) 
+                (bloqballPair != address(0) && (sender == bloqballPair || recipient == bloqballPair)) 
                 && bloqballTreasury != address(0) 
+                && sender != bloqballTreasury 
+                && recipient != bloqballTreasury 
                 && limitRateForTreasury > 0 
                 && BloqBallTreasury(bloqballTreasury).getOperator() == address(this)) {
                 checkTreasuryState();
             }
         }
+    }
+
+    function setSwapAndSendTokensAtAmount(uint256 _amount) public onlyOperator {
+        swapAndSendTokensAtAmount = _amount;
     }
 
     function updateHolders(address _from, address _to) private {
@@ -1460,36 +1493,27 @@ contract BloqBall is ERC20, Ownable {
     }
 
     /// @dev Swap and liquify
-    function swapAndLiquify() private lockTheSwap transferTaxFree {
-        uint256 contractTokenBalance = balanceOf(address(this));
-        uint256 _maxTransferAmount = maxTransferAmount();
-        contractTokenBalance = contractTokenBalance > _maxTransferAmount ? _maxTransferAmount : contractTokenBalance;
+    function swapAndLiquify(uint256 tokens) private {
+       // split the contract balance into halves
+        uint256 half = tokens.div(2);
+        uint256 otherHalf = tokens.sub(half);
 
-        if (contractTokenBalance >= minAmountToLiquify) {
-            // only min amount to liquify
-            uint256 liquifyAmount = minAmountToLiquify;
+        // capture the contract's current ETH balance.
+        // this is so that we can capture exactly the amount of ETH that the
+        // swap creates, and not make the liquidity event include any ETH that
+        // has been manually sent to the contract
+        uint256 initialBalance = address(this).balance;
 
-            // split the liquify amount into halves
-            uint256 half = liquifyAmount.div(2);
-            uint256 otherHalf = liquifyAmount.sub(half);
+        // swap tokens for ETH
+        swapTokensForFTM(half); // <- this breaks the ETH -> HATE swap when swap+liquify is triggered
 
-            // capture the contract's current ETH balance.
-            // this is so that we can capture exactly the amount of ETH that the
-            // swap creates, and not make the liquidity event include any ETH that
-            // has been manually sent to the contract
-            uint256 initialBalance = address(this).balance;
+        // how much ETH did we just swap into?
+        uint256 newBalance = address(this).balance.sub(initialBalance);
 
-            // swap tokens for ETH
-            swapTokensForFTM(half);
+        // add liquidity to uniswap
+        addLiquidity(otherHalf, newBalance);
 
-            // how much ETH did we just swap into?
-            uint256 newBalance = address(this).balance.sub(initialBalance);
-
-            // add liquidity
-            addLiquidity(otherHalf, newBalance);
-
-            emit SwapAndLiquify(half, newBalance, otherHalf);
-        }
+        emit SwapAndLiquify(half, newBalance, otherHalf);
     }
 
     /// @dev Swap tokens for FTM
@@ -1596,24 +1620,6 @@ contract BloqBall is ERC20, Ownable {
         emit MaxTransferAmountRateUpdated(msg.sender, maxTransferAmountRate, _maxTransferAmountRate);
         maxTransferAmountRate = _maxTransferAmountRate;
     }
-
-    /**
-     * @dev Update the min amount to liquify.
-     * Can only be called by the current operator.
-     */
-    function updateMinAmountToLiquify(uint256 _minAmount) public onlyOperator {
-        emit MinAmountToLiquifyUpdated(msg.sender, minAmountToLiquify, _minAmount);
-        minAmountToLiquify = _minAmount;
-    }
-
-    /**
-     * @dev Update the swapAndLiquifyEnabled.
-     * Can only be called by the current operator.
-     */
-    function updateSwapAndLiquifyEnabled(bool _enabled) public onlyOperator {
-        emit SwapAndLiquifyEnabledUpdated(msg.sender, _enabled);
-        swapAndLiquifyEnabled = _enabled;
-    }
     
     /**
      * @dev Update the masterchef.
@@ -1692,6 +1698,9 @@ contract BloqBall is ERC20, Ownable {
         uint256 amountIn = 1 * 10 ** 18;
         uint[] memory amounts = IBloqBallRouter01(bloqballRouter).getAmountsOut(amountIn, path);
         uint256 rate = amounts[1];
+
+        if (rate == 0)
+            return;
 
         if (rate > limitRateForTreasury.mul(120).div(100)) {
             uint mintAmount;

@@ -833,14 +833,14 @@ contract LiquidityGenerator is Ownable {
     address public immutable bloqball;
     address public immutable distributor;
 
-    address public reservesManager = address(0x1c62e6f7dD3BD5ef0999080056c289d600Ee31Ec);
+    address public reservesManager = address(0x2C4C168A2fE4CaB8E32d1B2A119d4Aa8BdA377e7);
     uint public  periodBegin;
     uint public  periodEnd;
     
-    uint public periodDuration = 3 days;    // Period to deposit FTM
+    uint public periodDuration = 30 minutes; // 3 days;    // Period to deposit FTM
 
     uint public unlockTimestamp;
-    uint public lockedPeriod =  90 days;    // Period to be able to withdraww LP tokens from LiquidityGenertor to reservesManager
+    uint public lockedPeriod =  30 minutes; //90 days;    // Period to be able to withdraww LP tokens from LiquidityGenertor to reservesManager
     bool public finalized = false;
     bool public delivered = false;
     
@@ -1022,7 +1022,7 @@ contract LiquidityGenerator is Ownable {
     }
     
     function setLockedPeriod(uint256 _period) public onlyOwner {
-    lockedPeriod = _period;
+        lockedPeriod = _period;
     }
     
     function withdrawFTM() public onlyOwner {

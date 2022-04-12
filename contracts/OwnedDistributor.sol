@@ -19,7 +19,7 @@ contract OwnedDistributor is Ownable{
     uint public vestingBegin;
     uint public vestingEnd;
     
-    uint public vestingPeriod = 120 minutes; //120 days;
+    uint public vestingPeriod = 120 days;
 
     struct Recipient {
         uint shares;
