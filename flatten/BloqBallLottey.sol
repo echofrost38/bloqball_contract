@@ -836,8 +836,6 @@ contract BloqBallLottery is ReentrancyGuard, IBloqBallLottery, Ownable {
         for (uint8 i=0; i<6; i++) {
             _numberInfos[arraynumber[i]] = false;
         }
-
-        ticketNumber = 400709294226;
         
         return ticketNumber;
     }
